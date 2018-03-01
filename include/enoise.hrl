@@ -10,12 +10,7 @@
 
 -record(key_pair, { puk, pik }).
 
--record(noise_ss, { cs        :: enoise_cipher_state:state()
-                  , ck = <<>> :: binary()
-                  , h  = <<>> :: binary()
-                  , hash = blake2b }).
-
--record(noise_hs, { ss :: #noise_ss{} | undefined
+-record(noise_hs, { ss :: enoise_sym_state: state()
                   , s  :: #key_pair{} | undefined
                   , e  :: #key_pair{} | undefined
                   , rs :: binary() | undefined

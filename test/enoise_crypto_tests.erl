@@ -28,3 +28,25 @@ chachapoly_test() ->
     ?assertMatch(PlainText, PlainText0),
     ok.
 
+blake2b_test() ->
+    Test = fun(#{ input := In, output := Out }) ->
+               ?assertMatch(Out, enoise_crypto:hash(blake2b, In))
+           end,
+    lists:foreach(Test, test_utils:blake2b_data()).
+
+%% blake2s_test() ->
+%%     #{ input := In, output := Out } = test_utils:blake2s_data(),
+%%     ?assertMatch(Out, enoise_crypto:hash(blake2s, In)).
+
+blake2b_hmac_test() ->
+    Test = fun(#{ key := Key, data := Data, hmac := HMAC }) ->
+               ?assertMatch(HMAC, enoise_crypto:hmac(blake2b, Key, Data))
+           end,
+    lists:foreach(Test, test_utils:blake2b_hmac_data()).
+
+blake2b_hkdf_test() ->
+    Test = fun(#{ key := Key, data := Data, out1 := Out1, out2 := Out2 }) ->
+               ?assertMatch([Out1, Out2, _], enoise_crypto:hkdf(blake2b, Key, Data))
+           end,
+    lists:foreach(Test, test_utils:blake2b_hkdf_data()).
+

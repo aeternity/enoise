@@ -31,5 +31,68 @@ chacha_data() ->
            "a6ad5cb4022b02709b")
      , mac   => hex_str_to_bin("0xeead9d67890cbb22392336fea1851f38") }.
 
+
+blake2b_data() ->
+    [#{ input => <<>>,
+        output => hex_str_to_bin("0x786a02f742015903c6c6fd852552d272912f4740e15847618a86e217f71f5419"
+                                   "d25e1031afee585313896444934eb04b903a685b1448b755d56f701afe9be2ce")
+      },
+     #{ input => <<"abc">>,
+        output => hex_str_to_bin("0xba80a53f981c4d0d6a2797b69f12f6e94c212f14685ac4b74b12bb6fdbffa2d1"
+                                   "7d87c5392aab792dc252d5de4533cc9518d38aa8dbf1925ab92386edd4009923")
+      },
+     #{ input => <<"abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq">>,
+        output => hex_str_to_bin("0x7285ff3e8bd768d69be62b3bf18765a325917fa9744ac2f582a20850bc2b1141"
+                                   "ed1b3e4528595acc90772bdf2d37dc8a47130b44f33a02e8730e5ad8e166e888")
+      },
+     #{ input => <<"abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmn"
+                   "hijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu">>,
+        output => hex_str_to_bin("0xce741ac5930fe346811175c5227bb7bfcd47f42612fae46c0809514f9e0e3a11"
+                                   "ee1773287147cdeaeedff50709aa716341fe65240f4ad6777d6bfaf9726e5e52")
+      }].
+
+blake2s_data() ->
+    #{ input => <<"abc">>,
+       output => hex_str_to_bin("0x508C5E8C327C14E2E1A72BA34EEB452F37458B209ED63A294D999B4C86675982")
+     }.
+
+blake2b_hmac_data() ->
+    [#{ key  => hex_str_to_bin("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                                 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        data => hex_str_to_bin("0x6666666666666666666666666666666666666666666666666666666666666666"
+                                 "6666666666666666666666666666666666666666666666666666666666666666"
+                                 "6666666666666666666666666666666666666666666666666666666666666666"
+                                 "6666666666666666666666666666666666666666666666666666666666666666"),
+        hmac => hex_str_to_bin("0x4054489AA4225A07BD7F4C89330AA6412B612AADC8FA86AFBC8EC6AC2D0F3AC8"
+                                 "ECDB6601B060F47488D4074C562F848B9F6168BA8CDEE22E399057B5D53129C9")
+      },
+     #{ key  => hex_str_to_bin("0x4054489AA4225A07BD7F4C89330AA6412B612AADC8FA86AFBC8EC6AC2D0F3AC8"
+                                 "ECDB6601B060F47488D4074C562F848B9F6168BA8CDEE22E399057B5D53129C9"),
+        data => hex_str_to_bin("0x01"),
+        hmac => hex_str_to_bin("0x359D3AA619DF4F73E4E8EA31D05F5631C96F119D46F6BB44B5C7772B862747E7"
+                                 "818D4BC8907C1EBA90B06AD7925EC5E751E4E92D0E0233F893CD3FED8DD6FB76")
+      },
+     #{ key  => hex_str_to_bin("0x4054489AA4225A07BD7F4C89330AA6412B612AADC8FA86AFBC8EC6AC2D0F3AC8"
+                                 "ECDB6601B060F47488D4074C562F848B9F6168BA8CDEE22E399057B5D53129C9"),
+        data => hex_str_to_bin("0x359D3AA619DF4F73E4E8EA31D05F5631C96F119D46F6BB44B5C7772B862747E7"
+                                 "818D4BC8907C1EBA90B06AD7925EC5E751E4E92D0E0233F893CD3FED8DD6FB7602"),
+        hmac => hex_str_to_bin("0x37E23F26F8445E3B5A88949B98606131774BA4D15F2C6E17A0A43972BB4EB6B5"
+                                 "CBB42F57D8B1B63B4C9EA64B0493E82A6F6D3A7037C33212EF6E4F56E321D4D9")
+      }].
+
+blake2b_hkdf_data() ->
+    [#{ key  => hex_str_to_bin("0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                                 "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"),
+        data => hex_str_to_bin("0x6666666666666666666666666666666666666666666666666666666666666666"
+                                 "6666666666666666666666666666666666666666666666666666666666666666"
+                                 "6666666666666666666666666666666666666666666666666666666666666666"
+                                 "6666666666666666666666666666666666666666666666666666666666666666"),
+        out1 => hex_str_to_bin("0x359D3AA619DF4F73E4E8EA31D05F5631C96F119D46F6BB44B5C7772B862747E7"
+                                 "818D4BC8907C1EBA90B06AD7925EC5E751E4E92D0E0233F893CD3FED8DD6FB76"),
+        out2 => hex_str_to_bin("0x37E23F26F8445E3B5A88949B98606131774BA4D15F2C6E17A0A43972BB4EB6B5"
+                                 "CBB42F57D8B1B63B4C9EA64B0493E82A6F6D3A7037C33212EF6E4F56E321D4D9")
+      }].
+
+
 hex_str_to_bin("0x" ++ Rest) ->
     << <<(list_to_integer([C], 16)):4>> || C <- Rest >>.

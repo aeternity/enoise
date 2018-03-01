@@ -9,6 +9,7 @@
         , encrypt_with_ad/3
         , has_key/1
         , init/2
+        , key/1
         , rekey/1
         , set_key/2
         , set_nonce/2
@@ -70,3 +71,7 @@ rekey(CState = #noise_cs{ k = K, cipher = Cipher }) ->
 -spec cipher(CState :: state()) -> noise_cipher().
 cipher(#noise_cs{ cipher = Cipher }) ->
     Cipher.
+
+-spec key(CState :: state()) -> key().
+key(#noise_cs{ k = K }) ->
+    K.
