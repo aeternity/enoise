@@ -29,9 +29,11 @@
 -opaque state() :: #noise_ss{}.
 -export_type([noise_hash/0, state/0]).
 
--spec init(Protocol :: #noise_protocol{}) -> state().
-init(Protocol = #noise_protocol{ hash = Hash, cipher = Cipher }) ->
-    Name = enoise_protocol:to_name(Protocol),
+-spec init(Protocol :: enoise_protocol:protocol()) -> state().
+init(Protocol) ->
+    Hash    = enoise_protocol:hash(Protocol),
+    Cipher  = enoise_protocol:cipher(Protocol),
+    Name    = enoise_protocol:to_name(Protocol),
     HashLen = enoise_crypto:hashlen(Hash),
     H1 =
         case byte_size(Name) > HashLen of
