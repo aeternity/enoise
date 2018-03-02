@@ -4,7 +4,7 @@
 
 -module(enoise_hs_state).
 
--export([init/4, next_message/1, read_message/2, write_message/2]).
+-export([finalize/1, init/4, next_message/1, read_message/2, write_message/2]).
 
 -include("enoise.hrl").
 
@@ -37,6 +37,15 @@ init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
                    ({in, [e]}, HS0) -> mix_hash(HS0, RE)
                 end, HS, PreMsgs).
 
+finalize(#noise_hs{ msgs = [], ss = SS, role = Role }) ->
+    {C1, C2} = enoise_sym_state:split(SS),
+    case Role of
+        initiator -> {ok, #{ tx => C1, rx => C2 }};
+        responder -> {ok, #{ rx => C1, tx => C2 }}
+    end;
+finalize(_) ->
+    error({bad_state, finalize}).
+
 next_message(#noise_hs{ msgs = [{Dir, _} | _] }) -> Dir;
 next_message(_) -> done.
 
@@ -44,19 +53,12 @@ write_message(HS = #noise_hs{ msgs = [{out, Msg} | Msgs] }, PayLoad) ->
     {HS1, MsgBuf1} = write_message(HS#noise_hs{ msgs = Msgs }, Msg, <<>>),
     {ok, HS2, MsgBuf2} = encrypt_and_hash(HS1, PayLoad),
     MsgBuf = <<MsgBuf1/binary, MsgBuf2/binary>>,
-    case Msgs of
-        [] -> {done, HS2, MsgBuf, enoise_sym_state:split(HS2#noise_hs.ss)};
-        _  -> {ok, HS2, MsgBuf}
-    end.
+    {ok, HS2, MsgBuf}.
 
 read_message(HS = #noise_hs{ msgs = [{in, Msg} | Msgs] }, <<Size:16, Message/binary>>) ->
     Size = byte_size(Message),
     {HS1, RestBuf1} = read_message(HS#noise_hs{ msgs = Msgs }, Msg, Message),
-    {ok, HS2, PlainBuf} = decrypt_and_hash(HS1, RestBuf1),
-    case Msgs of
-        [] -> {done, HS2, PlainBuf, enoise_sym_state:split(HS2#noise_hs.ss)};
-        _  -> {ok, HS2, PlainBuf}
-    end.
+    decrypt_and_hash(HS1, RestBuf1).
 
 write_message(HS, [], MsgBuf) ->
     {HS, MsgBuf};
@@ -131,6 +133,7 @@ decrypt_and_hash(HS = #noise_hs{ ss = SS0 }, CipherText) ->
     {ok, SS1, PlainText} = enoise_sym_state:decrypt_and_hash(SS0, CipherText),
     {ok, HS#noise_hs{ ss = SS1 }, PlainText}.
 
+
 msgs(Role, Protocol) ->
     {_Pre, Msgs} = protocol(Protocol),
     role_adapt(Role, Msgs).
@@ -142,7 +145,7 @@ pre_msgs(Role, Protocol) ->
 role_adapt(initiator, Msgs) ->
     Msgs;
 role_adapt(responder, Msgs) ->
-    Flip = fun(in) -> out; (out) -> in end,
+    Flip = fun({in, Msg}) -> {out, Msg}; ({out, Msg}) -> {in, Msg} end,
     lists:map(Flip, Msgs).
 
 protocol(nn) ->
