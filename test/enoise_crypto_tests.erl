@@ -5,6 +5,23 @@
 -module(enoise_crypto_tests).
 
 -include_lib("eunit/include/eunit.hrl").
+-include("enoise.hrl").
+
+curve25519_test() ->
+    KeyPair1 = enoise_crypto:new_key_pair(dh25519),
+    KeyPair2 = enoise_crypto:new_key_pair(dh25519),
+
+    SharedA = enoise_crypto:dh(dh25519, KeyPair1, KeyPair2#key_pair.puk),
+    SharedB = enoise_crypto:dh(dh25519, KeyPair2, KeyPair1#key_pair.puk),
+    ?assertMatch(SharedA, SharedB),
+
+    #{ a_pub := APub, a_priv := APriv,
+       b_pub := BPub, b_priv := BPriv, shared := Shared } = test_utils:curve25519_data(),
+
+    ?assertMatch(Shared, enoise_crypto:dh(dh25519, #key_pair{ puk = APub, pik = APriv }, BPub)),
+    ?assertMatch(Shared, enoise_crypto:dh(dh25519, #key_pair{ puk = BPub, pik = BPriv }, APub)),
+
+    ok.
 
 chachapoly_test() ->
     #{ key := Key, nonce := Nonce, ad := AD, mac := MAC,

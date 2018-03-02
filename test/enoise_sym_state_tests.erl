@@ -8,10 +8,7 @@
 -include("enoise.hrl").
 
 noise_XK_25519_ChaChaPoly_Blake2b_test() ->
-    Protocol =  #noise_protocol{ hs_pattern = noiseXK
-                               , dh         = dh25519
-                               , cipher     = 'ChaChaPoly'
-                               , hash       = blake2b },
+    Protocol =  enoise_protocol:from_name("Noise_XK_25519_ChaChaPoly_Blake2b"),
 
     SSE0 = enoise_sym_state:init(Protocol),
     SSD0 = enoise_sym_state:init(Protocol),
