@@ -93,8 +93,27 @@ protocol(kn) ->
     {[{out, [s]}], [{out, [e]}, {in, [e, ee, se]}]};
 protocol(nk) ->
     {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}]};
+protocol(kk) ->
+    {[{out, [s]}, {in, [s]}], [{out, [e, es, ss]}, {in, [e, ee, se]}]};
+protocol(nx) ->
+    {[], [{out, [e]}, {in, [e, ee, s, es]}]};
+protocol(kx) ->
+    {[{out, [s]}], [{out, [e]}, {in, [e, ee, se, s, es]}]};
+protocol(xn) ->
+    {[], [{out, [e]}, {in, [e, ee]}, {out, [s, se]}]};
+protocol(in) ->
+    {[], [{out, [e, s]}, {in, [e, ee, se]}]};
 protocol(xk) ->
-    {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}, {out, [s, se]}]}.
+    {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}, {out, [s, se]}]};
+protocol(ik) ->
+    {[{in, [s]}], [{out, [e, es, s, ss]}, {in, [e, ee, se]}]};
+protocol(xx) ->
+    {[], [{out, [e]}, {in, [e, ee, s, es]}, {out, [s, se]}]};
+protocol(ix) ->
+    {[], [{out, [e, s]}, {in, [e, ee, se, s, es]}]}.
+
+supported_pattern(P) ->
+    lists:member(P, [nn, kn, nk, kk, nx, kx, xn, in, xk, ik, xx, ix]).
 
 supported_hash(Hash) ->
     lists:member(Hash, [blake2b, sha256, sha512]).
@@ -104,9 +123,6 @@ supported_cipher(Cipher) ->
 
 supported_dh(Dh) ->
     lists:member(Dh, [dh25519]).
-
-supported_pattern(P) ->
-    lists:member(P, [nn, kn, nk, xk]).
 
 to_name(Pattern, Dh, Cipher, Hash) ->
     list_to_binary(lists:join("_", ["Noise", to_name_pattern(Pattern), to_name_dh(Dh),
