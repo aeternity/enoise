@@ -3,6 +3,7 @@
 %%%-------------------------------------------------------------------
 
 -module(test_utils).
+-include_lib("eunit/include/eunit.hrl").
 
 -compile([export_all, nowarn_export_all]).
 
@@ -101,5 +102,13 @@ blake2b_hkdf_data() ->
                                  "CBB42F57D8B1B63B4C9EA64B0493E82A6F6D3A7037C33212EF6E4F56E321D4D9")
       }].
 
+noise_test_vectors() ->
+    parse_test_vectors("test/test_vectors.txt").
 
 hex_str_to_bin("0x" ++ Rest) -> << <<(list_to_integer([C], 16)):4>> || C <- Rest >>.
+
+parse_test_vectors(File) ->
+    {ok, Bin} = file:read_file(File),
+    #{ vectors := Vectors } = jsx:decode(Bin, [{labels, atom}, return_maps]),
+    Vectors.
+

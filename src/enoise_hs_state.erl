@@ -11,17 +11,22 @@
 -type noise_role()  :: initiator | responder.
 -type noise_dh()    :: dh25519 | dh448.
 -type noise_token() :: s | e | ee | ss | es | se.
--type noise_msg()   :: {in | out, [noise_token()]}.
 
 -record(noise_hs, { ss                :: enoise_sym_state:state()
-                  , s                 :: #key_pair{} | undefined
-                  , e                 :: #key_pair{} | undefined
+                  , s                 :: enoise_crypto:key_pair() | undefined
+                  , e                 :: enoise_crypto:key_pair() | undefined
                   , rs                :: binary() | undefined
                   , re                :: binary() | undefined
                   , role = initiatior :: noise_role()
                   , dh = dh25519      :: noise_dh()
-                  , msgs = []         :: [noise_msg()] }).
+                  , msgs = []         :: [enoise_protocol:noise_msg()] }).
 
+-export_type([noise_dh/0, noise_role/0, noise_token/0]).
+
+-spec init(Protocol :: string() | enoise_protocol:protocol(),
+           Role :: noise_role(), Prologue :: binary(), Keys :: term()) -> #noise_hs{}.
+init(ProtocolName, Role, Prologue, Keys) when is_list(ProtocolName) ->
+    init(enoise_protocol:from_name(ProtocolName), Role, Prologue, Keys);
 init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
     SS0 = enoise_sym_state:init(Protocol),
     SS1 = enoise_sym_state:mix_hash(SS0, Prologue),
@@ -29,19 +34,20 @@ init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
                   , s = S, e = E, rs = RS, re = RE
                   , role = Role
                   , dh = enoise_protocol:dh(Protocol)
-                  , msgs = msgs(Role, enoise_protocol:pattern(Protocol)) },
-    PreMsgs = pre_msgs(Role, enoise_protocol:pattern(Protocol)),
-    lists:foldl(fun({out, [s]}, HS0)  -> mix_hash(HS0, S#key_pair.puk);
-                   ({out, [e]}, HS0)  -> mix_hash(HS0, E#key_pair.puk);
-                   ({in, [s]}, HS0) -> mix_hash(HS0, RS);
-                   ({in, [e]}, HS0) -> mix_hash(HS0, RE)
+                  , msgs = enoise_protocol:msgs(Role, Protocol) },
+    PreMsgs = enoise_protocol:pre_msgs(Role, Protocol),
+    lists:foldl(fun({out, [s]}, HS0) -> mix_hash(HS0, enoise_crypto:pub_key(S));
+                   ({out, [e]}, HS0) -> mix_hash(HS0, enoise_crypto:pub_key(E));
+                   ({in, [s]}, HS0)  -> mix_hash(HS0, RS);
+                   ({in, [e]}, HS0)  -> mix_hash(HS0, RE)
                 end, HS, PreMsgs).
 
 finalize(#noise_hs{ msgs = [], ss = SS, role = Role }) ->
     {C1, C2} = enoise_sym_state:split(SS),
+    HSHash   = enoise_sym_state:h(SS),
     case Role of
-        initiator -> {ok, #{ tx => C1, rx => C2 }};
-        responder -> {ok, #{ rx => C1, tx => C2 }}
+        initiator -> {ok, #{ tx => C1, rx => C2, hs_hash => HSHash }};
+        responder -> {ok, #{ rx => C1, tx => C2, hs_hash => HSHash }}
     end;
 finalize(_) ->
     error({bad_state, finalize}).
@@ -73,10 +79,15 @@ read_message(HS, [Token | Tokens], Data0) ->
     read_message(HS1, Tokens, Data1).
 
 write_token(HS = #noise_hs{ e = undefined }, e) ->
-    E = #key_pair{ puk = PubE } = new_key_pair(HS),
+    E = new_key_pair(HS),
+    PubE = enoise_crypto:pub_key(E),
     {mix_hash(HS#noise_hs{ e = E }, PubE), PubE};
+%% Should only apply during test - TODO: secure this
+write_token(HS = #noise_hs{ e = E }, e) ->
+    PubE = enoise_crypto:pub_key(E),
+    {mix_hash(HS, PubE), PubE};
 write_token(HS = #noise_hs{ s = S }, s) ->
-    {ok, HS1, Msg} = encrypt_and_hash(HS, S#key_pair.puk),
+    {ok, HS1, Msg} = encrypt_and_hash(HS, enoise_crypto:pub_key(S)),
     {HS1, Msg};
 write_token(HS, Token) ->
     {K1, K2} = dh_token(HS, Token),
@@ -134,21 +145,4 @@ decrypt_and_hash(HS = #noise_hs{ ss = SS0 }, CipherText) ->
     {ok, HS#noise_hs{ ss = SS1 }, PlainText}.
 
 
-msgs(Role, Protocol) ->
-    {_Pre, Msgs} = protocol(Protocol),
-    role_adapt(Role, Msgs).
 
-pre_msgs(Role, Protocol) ->
-    {PreMsgs, _Msgs} = protocol(Protocol),
-    role_adapt(Role, PreMsgs).
-
-role_adapt(initiator, Msgs) ->
-    Msgs;
-role_adapt(responder, Msgs) ->
-    Flip = fun({in, Msg}) -> {out, Msg}; ({out, Msg}) -> {in, Msg} end,
-    lists:map(Flip, Msgs).
-
-protocol(nn) ->
-    {[], [{out, [e]}, {in, [e, ee]}]};
-protocol(xk) ->
-    {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}, {out, [s, se]}]}.

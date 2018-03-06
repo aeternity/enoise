@@ -5,7 +5,7 @@
 -module(enoise_crypto_tests).
 
 -include_lib("eunit/include/eunit.hrl").
--include("enoise.hrl").
+-record(key_pair, { puk, pik }).
 
 curve25519_test() ->
     KeyPair1 = enoise_crypto:new_key_pair(dh25519),

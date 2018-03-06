@@ -8,7 +8,7 @@
 -include("enoise.hrl").
 
 noise_XK_25519_ChaChaPoly_Blake2b_test() ->
-    Protocol =  enoise_protocol:from_name("Noise_XK_25519_ChaChaPoly_Blake2b"),
+    Protocol =  enoise_protocol:from_name("Noise_XK_25519_ChaChaPoly_BLAKE2b"),
 
     SSE0 = enoise_sym_state:init(Protocol),
     SSD0 = enoise_sym_state:init(Protocol),
