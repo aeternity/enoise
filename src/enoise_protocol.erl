@@ -12,7 +12,7 @@
         , pattern/1
         , pre_msgs/2
         , to_name/1]).
--compile(export_all).
+
 -type noise_pattern() :: nn | xk.
 -type noise_msg()   :: {in | out, [enoise_hs_state:noise_token()]}.
 

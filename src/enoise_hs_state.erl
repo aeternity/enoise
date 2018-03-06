@@ -17,7 +17,7 @@
                   , e                 :: enoise_crypto:key_pair() | undefined
                   , rs                :: binary() | undefined
                   , re                :: binary() | undefined
-                  , role = initiatior :: noise_role()
+                  , role = initiator  :: noise_role()
                   , dh = dh25519      :: noise_dh()
                   , msgs = []         :: [enoise_protocol:noise_msg()] }).
 
@@ -61,8 +61,7 @@ write_message(HS = #noise_hs{ msgs = [{out, Msg} | Msgs] }, PayLoad) ->
     MsgBuf = <<MsgBuf1/binary, MsgBuf2/binary>>,
     {ok, HS2, MsgBuf}.
 
-read_message(HS = #noise_hs{ msgs = [{in, Msg} | Msgs] }, <<Size:16, Message/binary>>) ->
-    Size = byte_size(Message),
+read_message(HS = #noise_hs{ msgs = [{in, Msg} | Msgs] }, Message) ->
     {HS1, RestBuf1} = read_message(HS#noise_hs{ msgs = Msgs }, Msg, Message),
     decrypt_and_hash(HS1, RestBuf1).
 

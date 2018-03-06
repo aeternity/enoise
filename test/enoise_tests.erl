@@ -74,7 +74,7 @@ noise_test([M = #{ payload := PL0, ciphertext := CT0 } | Msgs], SendHS, RecvHS, 
         {out, in} ->
             {ok, SendHS1, Message} = enoise_hs_state:write_message(SendHS, PL),
             ?assertEqual(CT, Message),
-            {ok, RecvHS1, PL1} = enoise_hs_state:read_message(RecvHS, <<(byte_size(Message)):16, Message/binary>>),
+            {ok, RecvHS1, PL1} = enoise_hs_state:read_message(RecvHS, Message),
             ?assertEqual(PL, PL1),
             noise_test(Msgs, RecvHS1, SendHS1, HSHash);
         {done, done} ->
@@ -104,7 +104,7 @@ client_test() ->
     ClientPubKey  = <<115,39,86,77,44,85,192,176,202,11,4,6,194,144,127,123, 34,67,62,180,190,232,251,5,216,168,192,190,134,65,13,64>>,
     ServerPubKey  = <<112,91,141,253,183,66,217,102,211,40,13,249,238,51,77,114,163,159,32,1,162,219,76,106,89,164,34,71,149,2,103,59>>,
 
-    {ok, TcpSock} = gen_tcp:connect("localhost", 7890, [{active, true}, binary, {reuseaddr, true}], 1000),
+    {ok, TcpSock} = gen_tcp:connect("localhost", 7890, [{active, false}, binary, {reuseaddr, true}], 1000),
     gen_tcp:send(TcpSock, <<0,8,0,0,3>>), %% "Noise_XK_25519_ChaChaPoly_Blake2b"
 
     Opts = [ {noise, TestProtocol}
@@ -113,9 +113,12 @@ client_test() ->
            , {prologue, <<0,8,0,0,3>>}],
 
     {ok, EConn} = enoise:connect(TcpSock, Opts),
-    EConn1 = enoise:send(EConn, <<"ok\n">>),
-    {EConn2, <<"ok\n">>} = enoise:recv(EConn1),
-    enoise:close(EConn2).
+    ok = enoise:send(EConn, <<"ok\n">>),
+    %% receive
+    %%     {noise, EConn, <<"ok\n">>} -> ok
+    %% after 1000 -> error(timeout) end,
+    {ok, <<"ok\n">>} = enoise:recv(EConn, 3, 1000),
+    enoise:close(EConn).
 
 
 %% Expects a call-in from a local echo-client (noise-c)
