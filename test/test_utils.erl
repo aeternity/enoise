@@ -112,3 +112,15 @@ parse_test_vectors(File) ->
     #{ vectors := Vectors } = jsx:decode(Bin, [{labels, atom}, return_maps]),
     Vectors.
 
+%% Only test supported configurations
+noise_test_filter(Tests0) ->
+    Tests1 = [ T || T = #{ name := Name } <- Tests0, supported(Name) ],
+    case length(Tests1) < length(Tests0) of
+        true  -> ?debugFmt("WARNING: ~p test vectors are unsupported", [length(Tests0) - length(Tests1)]);
+        false -> ok
+    end,
+    Tests1.
+
+supported(Name) ->
+    try enoise_protocol:from_name(Name), true
+    catch _:_ -> false end.
