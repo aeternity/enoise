@@ -114,18 +114,79 @@ handle_send(S = #state{ tcp_sock = TcpSock, tx = Tx }, Data) ->
     gen_tcp:send(TcpSock, <<(byte_size(Msg)):16, Msg/binary>>),
     {ok, S#state{ tx = Tx1 }}.
 
-handle_recv(S = #state{ buf = Buf, rx = Rx, tcp_sock = TcpSock }, Len, TO)
+%% Some special cases
+%% - Length = 0 (get all available data)
+%%   This may leave raw (encrypted) data in rawbuf (but: buf = <<>>)
+%% - Length N when there is stuff in rawbuf
+handle_recv(S = #state{ buf = Buf, tcp_sock = TcpSock }, 0, TO) ->
+    %% Get all available data
+    {ok, Data} = gen_tcp:recv(TcpSock, 0, TO),
+    %% Use handle_data to process it
+    {S1, Msgs} = handle_data(S, Data),
+    Res = lists:foldl(fun(Msg, B) -> <<B/binary, Msg/binary>> end, Buf, Msgs),
+    {{ok, Res}, S1#state{ buf = <<>> }};
+handle_recv(S = #state{ buf = Buf, rx = Rx }, Len, TO)
     when byte_size(Buf) < Len ->
-    {ok, <<MsgLen:16>>} = gen_tcp:recv(TcpSock, 2, TO),
-    {ok, Data} = gen_tcp:recv(TcpSock, MsgLen, TO),
-    case enoise_cipher_state:decrypt_with_ad(Rx, <<>>, Data) of
-        {ok, Rx1, Msg1} ->
-            handle_recv(S#state{ buf = <<Buf/binary, Msg1/binary>>, rx = Rx1 }, Len, TO);
-        {error, _} ->
-            error({enoise_error, decrypt_input_failed})
+    case recv_noise_msg(S, TO) of
+        {ok, S1, Data} ->
+            case enoise_cipher_state:decrypt_with_ad(Rx, <<>>, Data) of
+                {ok, Rx1, Msg1} ->
+                    NewBuf = <<Buf/binary, Msg1/binary>>,
+                    handle_recv(S1#state{ buf = NewBuf, rx = Rx1 }, Len, TO);
+                {error, _} ->
+                    %% Return error and drop the data we could not decrypt
+                    %% Unlikely that we can recover from this, but leave the
+                    %% closing to the user...
+                    {{error, decrypt_input_failed}, S1}
+            end;
+        {error, S1, Reason} ->
+            {{error, Reason}, S1}
     end;
 handle_recv(S = #state{ buf = Buf }, Len, _TO) ->
     <<Data:Len/binary, NewBuf/binary>> = Buf,
     {{ok, Data}, S#state{ buf = NewBuf }}.
 
+%% A tad bit tricky, we need to be careful not to lose read data, and
+%% also not spend (much) more than TO - while at the same time we can
+%% have some previously received Raw data in rawbuf...
+recv_noise_msg(S = #state{ rawbuf = RBuf, tcp_sock = TcpSock }, TO) ->
+    case recv_noise_msg_len(TcpSock, RBuf, TO) of
+        {error, Reason} ->
+            {error, S, Reason};
+        {ok, TimeSpent, RBuf1} ->
+            TO1 = case TO of infinity -> infinity; _ -> TO - TimeSpent end,
+            case recv_noise_msg_data(TcpSock, RBuf1, TO1) of
+                {error, Reason} ->
+                    {error, S#state{ rawbuf = RBuf1 }, Reason};
+                {ok, Data} ->
+                    {ok, S#state{rawbuf = <<>>}, Data}
+            end
+    end.
 
+recv_noise_msg_len(TcpSock, <<>>, TO) ->
+    timed_recv(TcpSock, 2, TO);
+%% I wouldn't expect the following clause to ever be used
+%% unless mocked tests are thrown at this!
+recv_noise_msg_len(TcpSock, <<B0:8>>, TO) ->
+    case timed_recv(TcpSock, 1, TO) of
+        {ok, TimeSpent, <<B1:8>>} -> {ok, TimeSpent, <<B0:8, B1:8>>};
+        Err = {error, _}          -> Err
+    end;
+recv_noise_msg_len(_, Buf, _) ->
+    {ok, 0, Buf}.
+
+recv_noise_msg_data(TcpSock, <<MsgLen:16, PreData/binary>>, TO) ->
+    case gen_tcp:recv(TcpSock, MsgLen - byte_size(PreData), TO) of
+        {ok, Data}       -> {ok, <<PreData/binary, Data/binary>>};
+        Err = {error, _} -> Err
+    end.
+
+timed_recv(TcpSock, Len, TO) ->
+    Start = erlang:timestamp(),
+    case gen_tcp:recv(TcpSock, Len, TO) of
+        {ok, Data} ->
+            Diff = timer:now_diff(erlang:timestamp(), Start) div 1000,
+            {ok, Diff, Data};
+        Err = {error, _} ->
+            Err
+    end.
