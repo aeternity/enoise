@@ -33,6 +33,8 @@ start_link(TcpSock, Rx, Tx, Owner, Active) ->
 send(Noise, Data) ->
     gen_server:call(Noise, {send, Data}).
 
+recv(Noise, Length, infinity) ->
+    gen_server:call(Noise, {recv, Length, infinity}, infinity);
 recv(Noise, Length, Timeout) ->
     gen_server:call(Noise, {recv, Length, Timeout}, Timeout + 100).
 
