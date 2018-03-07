@@ -11,7 +11,12 @@
         , msgs/2
         , pattern/1
         , pre_msgs/2
+        , supported/0
         , to_name/1]).
+
+-ifdef(TEST).
+-export([to_name/4]).
+-endif.
 
 -type noise_pattern() :: nn | xk.
 -type noise_msg()   :: {in | out, [enoise_hs_state:noise_token()]}.
@@ -113,16 +118,24 @@ protocol(ix) ->
     {[], [{out, [e, s]}, {in, [e, ee, se, s, es]}]}.
 
 supported_pattern(P) ->
-    lists:member(P, [nn, kn, nk, kk, nx, kx, xn, in, xk, ik, xx, ix]).
+    lists:member(P, maps:get(hs_pattern, supported())).
 
 supported_hash(Hash) ->
-    lists:member(Hash, [blake2b, sha256, sha512]).
+    lists:member(Hash, maps:get(hash, supported())).
 
 supported_cipher(Cipher) ->
-    lists:member(Cipher, ['ChaChaPoly', 'AESGCM']).
+    lists:member(Cipher, maps:get(cipher, supported())).
 
 supported_dh(Dh) ->
-    lists:member(Dh, [dh25519]).
+    lists:member(Dh, maps:get(dh, supported())).
+
+-spec supported() -> map().
+supported() ->
+    #{ hs_pattern => [nn, kn, nk, kk, nx, kx, xn, in, xk, ik, xx, ix]
+    ,  hash       => [blake2b, sha256, sha512]
+    ,  cipher     => ['ChaChaPoly', 'AESGCM']
+    ,  dh         => [dh25519]
+    }.
 
 to_name(Pattern, Dh, Cipher, Hash) ->
     list_to_binary(lists:join("_", ["Noise", to_name_pattern(Pattern), to_name_dh(Dh),
