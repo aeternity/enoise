@@ -63,13 +63,13 @@ handle_info({tcp, TS, Data}, S = #state{ tcp_sock = TS }) ->
     {noreply, S2};
 handle_info({tcp_closed, TS}, S = #state{ tcp_sock = TS, active = A, owner = O }) ->
     [ O ! {tcp_closed, TS} || A ],
-    {stop, tcp_closed, S};
+    {stop, normal, S#state{ tcp_sock = undefined }};
 handle_info(Msg, S) ->
     io:format("Unexpected info: ~p\n", [Msg]),
     {noreply, S}.
 
-terminate(Reason, #state{ tcp_sock = TcpSock }) ->
-    [ gen_tcp:close(TcpSock) || Reason /= tcp_closed ],
+terminate(_Reason, #state{ tcp_sock = TcpSock }) ->
+    [ gen_tcp:close(TcpSock) || TcpSock /= undefined ],
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
