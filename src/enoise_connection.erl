@@ -124,6 +124,6 @@ handle_recv(S = #state{ buf = Buf, rx = Rx, tcp_sock = TcpSock }, Len, TO)
     end;
 handle_recv(S = #state{ buf = Buf }, Len, _TO) ->
     <<Data:Len/binary, NewBuf/binary>> = Buf,
-    {{ok, Data}, S#state{ buf = Buf }}.
+    {{ok, Data}, S#state{ buf = NewBuf }}.
 
 
