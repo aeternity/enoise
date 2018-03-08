@@ -18,8 +18,8 @@
 -export([to_name/4]).
 -endif.
 
--type noise_pattern() :: nn | xk.
--type noise_msg()   :: {in | out, [enoise_hs_state:noise_token()]}.
+-type noise_pattern() :: nn | kn | nk | kk | nx | kx | xn | in | xk | ik | xx | ix.
+-type noise_msg()     :: {in | out, [enoise_hs_state:noise_token()]}.
 
 -record(noise_protocol,
         { hs_pattern = noiseNN      :: noise_pattern()
