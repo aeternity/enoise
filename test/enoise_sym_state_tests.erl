@@ -5,7 +5,6 @@
 -module(enoise_sym_state_tests).
 
 -include_lib("eunit/include/eunit.hrl").
--include("enoise.hrl").
 
 noise_XK_25519_ChaChaPoly_Blake2b_test() ->
     Protocol =  enoise_protocol:from_name("Noise_XK_25519_ChaChaPoly_BLAKE2b"),

@@ -14,30 +14,23 @@
         , hashlen/1
         , hkdf/3
         , hmac/3
-        , new_key_pair/1
         , pad/3
-        , pub_key/1
         , rekey/2
         ]).
 
--record(key_pair, { puk, pik }).
-
--opaque key_pair() :: #key_pair{}.
-
--export_type([key_pair/0]).
-
 -define(MAC_LEN, 16).
 
--spec new_key_pair(Algo :: enoise_hs_state:noise_dh()) -> key_pair().
-new_key_pair(dh25519) ->
-    KeyPair = enacl:crypto_sign_ed25519_keypair(),
-    #key_pair{ puk = enacl:crypto_sign_ed25519_public_to_curve25519(maps:get(public, KeyPair))
-             , pik = enacl:crypto_sign_ed25519_secret_to_curve25519(maps:get(secret, KeyPair)) }.
+-type keypair() :: enoise_keypair:keypair().
 
+%% @doc Perform a Diffie-Hellman calculation with the secret key from `Key1'
+%% and the public key from `Key2' with algorithm `Algo'.
 -spec dh(Algo :: enoise_hs_state:noise_dh(),
-         PrivKey :: key_pair(), PubKey :: binary()) -> binary().
-dh(dh25519, KeyPair, PubKey) ->
-    enacl:curve25519_scalarmult(KeyPair#key_pair.pik, PubKey).
+          Key1:: keypair(), Key2 :: keypair()) -> binary().
+dh(dh25519, Key1, Key2) ->
+    enacl:curve25519_scalarmult( enoise_keypair:seckey(Key1)
+                               , enoise_keypair:pubkey(Key2));
+dh(Type, _Key1, _Key2) ->
+    error({unsupported_diffie_hellman, Type}).
 
 -spec hmac(Hash :: enoise_sym_state:noise_hash(),
            Key :: binary(), Data :: binary()) -> binary().
@@ -106,9 +99,6 @@ pad(Data, MinSize, PadByte) ->
             PadData = << <<PadByte:8>> || _ <- lists:seq(1, MinSize - N) >>,
             <<Data/binary, PadData/binary>>
     end.
-
--spec pub_key(KeyPair :: key_pair()) -> binary().
-pub_key(#key_pair{ puk = PubKey }) -> PubKey.
 
 -spec hashlen(Hash :: enoise_sym_state:noise_hash()) -> non_neg_integer().
 hashlen(sha256)  -> 32;

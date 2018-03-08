@@ -11,12 +11,13 @@
 -type noise_role()  :: initiator | responder.
 -type noise_dh()    :: dh25519 | dh448.
 -type noise_token() :: s | e | ee | ss | es | se.
+-type keypair()     :: enoise_keypair:keypair().
 
 -record(noise_hs, { ss                :: enoise_sym_state:state()
-                  , s                 :: enoise_crypto:key_pair() | undefined
-                  , e                 :: enoise_crypto:key_pair() | undefined
-                  , rs                :: binary() | undefined
-                  , re                :: binary() | undefined
+                  , s                 :: keypair() | undefined
+                  , e                 :: keypair() | undefined
+                  , rs                :: keypair() | undefined
+                  , re                :: keypair() | undefined
                   , role = initiator  :: noise_role()
                   , dh = dh25519      :: noise_dh()
                   , msgs = []         :: [enoise_protocol:noise_msg()] }).
@@ -24,7 +25,8 @@
 -export_type([noise_dh/0, noise_role/0, noise_token/0]).
 
 -spec init(Protocol :: string() | enoise_protocol:protocol(),
-           Role :: noise_role(), Prologue :: binary(), Keys :: term()) -> #noise_hs{}.
+           Role :: noise_role(), Prologue :: binary(),
+           Keys :: term()) -> #noise_hs{}.
 init(ProtocolName, Role, Prologue, Keys) when is_list(ProtocolName) ->
     init(enoise_protocol:from_name(ProtocolName), Role, Prologue, Keys);
 init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
@@ -36,10 +38,10 @@ init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
                   , dh = enoise_protocol:dh(Protocol)
                   , msgs = enoise_protocol:msgs(Role, Protocol) },
     PreMsgs = enoise_protocol:pre_msgs(Role, Protocol),
-    lists:foldl(fun({out, [s]}, HS0) -> mix_hash(HS0, enoise_crypto:pub_key(S));
-                   ({out, [e]}, HS0) -> mix_hash(HS0, enoise_crypto:pub_key(E));
-                   ({in, [s]}, HS0)  -> mix_hash(HS0, RS);
-                   ({in, [e]}, HS0)  -> mix_hash(HS0, RE)
+    lists:foldl(fun({out, [s]}, HS0) -> mix_hash(HS0, enoise_keypair:pubkey(S));
+                   ({out, [e]}, HS0) -> mix_hash(HS0, enoise_keypair:pubkey(E));
+                   ({in, [s]}, HS0)  -> mix_hash(HS0, enoise_keypair:pubkey(RS));
+                   ({in, [e]}, HS0)  -> mix_hash(HS0, enoise_keypair:pubkey(RE))
                 end, HS, PreMsgs).
 
 finalize(#noise_hs{ msgs = [], ss = SS, role = Role }) ->
@@ -79,30 +81,32 @@ read_message(HS, [Token | Tokens], Data0) ->
 
 write_token(HS = #noise_hs{ e = undefined }, e) ->
     E = new_key_pair(HS),
-    PubE = enoise_crypto:pub_key(E),
+    PubE = enoise_keypair:pubkey(E),
     {mix_hash(HS#noise_hs{ e = E }, PubE), PubE};
 %% Should only apply during test - TODO: secure this
 write_token(HS = #noise_hs{ e = E }, e) ->
-    PubE = enoise_crypto:pub_key(E),
+    PubE = enoise_keypair:pubkey(E),
     {mix_hash(HS, PubE), PubE};
 write_token(HS = #noise_hs{ s = S }, s) ->
-    {ok, HS1, Msg} = encrypt_and_hash(HS, enoise_crypto:pub_key(S)),
+    {ok, HS1, Msg} = encrypt_and_hash(HS, enoise_keypair:pubkey(S)),
     {HS1, Msg};
 write_token(HS, Token) ->
     {K1, K2} = dh_token(HS, Token),
     {mix_key(HS, dh(HS, K1, K2)), <<>>}.
 
-read_token(HS = #noise_hs{ re = undefined }, e, Data0) ->
-    DHLen = dhlen(HS),
-    <<RE:DHLen/binary, Data1/binary>> = Data0,
-    {mix_hash(HS#noise_hs{ re = RE }, RE), Data1};
-read_token(HS = #noise_hs{ rs = undefined }, s, Data0) ->
+read_token(HS = #noise_hs{ re = undefined, dh = DH }, e, Data0) ->
+    DHLen = enoise_crypto:dhlen(DH),
+    <<REPub:DHLen/binary, Data1/binary>> = Data0,
+    RE = enoise_keypair:new(DH, REPub),
+    {mix_hash(HS#noise_hs{ re = RE }, REPub), Data1};
+read_token(HS = #noise_hs{ rs = undefined, dh = DH }, s, Data0) ->
     DHLen = case has_key(HS) of
-        true  -> dhlen(HS) + 16;
-        false -> dhlen(HS)
+        true  -> enoise_crypto:dhlen(DH) + 16;
+        false -> enoise_crypto:dhlen(DH)
     end,
     <<Temp:DHLen/binary, Data1/binary>> = Data0,
-    {ok, HS1, RS} = decrypt_and_hash(HS, Temp),
+    {ok, HS1, RSPub} = decrypt_and_hash(HS, Temp),
+    RS = enoise_keypair:new(DH, RSPub),
     {HS1#noise_hs{ rs = RS }, Data1};
 read_token(HS, Token, Data) ->
     {K1, K2} = dh_token(HS, Token),
@@ -117,13 +121,10 @@ dh_token(#noise_hs{ s = S, rs = RS }                  , ss) -> {S, RS}.
 
 %% Local wrappers
 new_key_pair(#noise_hs{ dh = DH }) ->
-    enoise_crypto:new_key_pair(DH).
+    enoise_keypair:new(DH).
 
-dh(#noise_hs{ dh = DH }, KeyPair, PubKey) ->
-    enoise_crypto:dh(DH, KeyPair, PubKey).
-
-dhlen(#noise_hs{ dh = DH }) ->
-    enoise_crypto:dhlen(DH).
+dh(#noise_hs{ dh = DH }, Key1, Key2) ->
+    enoise_crypto:dh(DH, Key1, Key2).
 
 has_key(#noise_hs{ ss = SS }) ->
     CS = enoise_sym_state:cipher_state(SS),

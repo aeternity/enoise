@@ -5,7 +5,6 @@
 -module(enoise_hs_state_tests).
 
 -include_lib("eunit/include/eunit.hrl").
--record(key_pair, { puk, pik }).
 
 noise_hs_test_() ->
     %% Test vectors from https://raw.githubusercontent.com/rweather/noise-c/master/tests/vector/noise-c-basic.txt
@@ -40,11 +39,11 @@ noise_hs_test(V = #{ name := Name }) ->
     ok.
 
 noise_test(_Name, Protocol, Init, Resp, Messages, HSHash) ->
-    PubK = fun(undefined) -> undefined; (S) -> enacl:curve25519_scalarmult_base(S) end,
+    DH = enoise_protocol:dh(Protocol),
+    SecK = fun(undefined) -> undefined; (Sec) -> enoise_keypair:new(DH, Sec, undefined) end,
+    PubK = fun(undefined) -> undefined; (Pub) -> enoise_keypair:new(DH, Pub) end,
     HSInit = fun(P, R, #{ e := E, s := S, rs := RS, prologue := PL }) ->
-                enoise_hs_state:init(P, R, PL, {#key_pair{ pik = S, puk = PubK(S) },
-                                                #key_pair{ pik = E, puk = PubK(E) },
-                                                RS, undefined})
+                enoise_hs_state:init(P, R, PL, {SecK(S), SecK(E), PubK(RS), undefined})
              end,
 
     InitHS = HSInit(Protocol, initiator, Init),

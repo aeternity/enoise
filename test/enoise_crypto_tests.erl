@@ -5,21 +5,22 @@
 -module(enoise_crypto_tests).
 
 -include_lib("eunit/include/eunit.hrl").
--record(key_pair, { puk, pik }).
 
 curve25519_test() ->
-    KeyPair1 = enoise_crypto:new_key_pair(dh25519),
-    KeyPair2 = enoise_crypto:new_key_pair(dh25519),
+    KeyPair1 = enoise_keypair:new(dh25519),
+    KeyPair2 = enoise_keypair:new(dh25519),
 
-    SharedA = enoise_crypto:dh(dh25519, KeyPair1, KeyPair2#key_pair.puk),
-    SharedB = enoise_crypto:dh(dh25519, KeyPair2, KeyPair1#key_pair.puk),
+    SharedA = enoise_crypto:dh(dh25519, KeyPair1, KeyPair2),
+    SharedB = enoise_crypto:dh(dh25519, KeyPair2, KeyPair1),
     ?assertMatch(SharedA, SharedB),
 
     #{ a_pub := APub, a_priv := APriv,
        b_pub := BPub, b_priv := BPriv, shared := Shared } = test_utils:curve25519_data(),
 
-    ?assertMatch(Shared, enoise_crypto:dh(dh25519, #key_pair{ puk = APub, pik = APriv }, BPub)),
-    ?assertMatch(Shared, enoise_crypto:dh(dh25519, #key_pair{ puk = BPub, pik = BPriv }, APub)),
+    KeyPair3 = enoise_keypair:new(dh25519, APriv, APub),
+    KeyPair4 = enoise_keypair:new(dh25519, BPriv, BPub),
+    ?assertMatch(Shared, enoise_crypto:dh(dh25519, KeyPair3, KeyPair4)),
+    ?assertMatch(Shared, enoise_crypto:dh(dh25519, KeyPair4, KeyPair3)),
 
     ok.
 

@@ -18,8 +18,8 @@ noise_dh25519_test_() ->
 
 setup_dh25519() ->
     %% Generate a static key-pair for Client and Server
-    SrvKeyPair = enoise_crypto:new_key_pair(dh25519),
-    CliKeyPair = enoise_crypto:new_key_pair(dh25519),
+    SrvKeyPair = enoise_keypair:new(dh25519),
+    CliKeyPair = enoise_keypair:new(dh25519),
 
     #{ hs_pattern := Ps, hash := Hs, cipher := Cs } = enoise_protocol:supported(),
     Configurations = [ enoise_protocol:to_name(P, dh25519, C, H)
@@ -31,11 +31,11 @@ noise_test(Conf, SKP, CKP) ->
     Protocol = enoise_protocol:from_name(Conf),
     Port     = 4556,
 
-    EchoSrv = echo_srv_start(Port, Protocol, SKP, enoise_crypto:pub_key(CKP)),
+    EchoSrv = echo_srv_start(Port, Protocol, SKP, CKP),
 
     {ok, TcpSock} = gen_tcp:connect("localhost", Port, [{active, false}, binary, {reuseaddr, true}], 100),
 
-    Opts = [{noise, Protocol}, {s, CKP}] ++ [{rs, enoise_crypto:pub_key(SKP)} || need_rs(initiator, Conf) ],
+    Opts = [{noise, Protocol}, {s, CKP}] ++ [{rs, SKP} || need_rs(initiator, Conf) ],
     {ok, EConn} = enoise:connect(TcpSock, Opts),
 
     ok = enoise:send(EConn, <<"Hello World!">>),
@@ -86,27 +86,27 @@ need_rs(Role, Protocol) ->
     lists:member({in, [s]}, PreMsgs).
 
 %% Talks to local echo-server (noise-c)
-%% client_test() ->
-%%     TestProtocol = enoise_protocol:from_name("Noise_XK_25519_ChaChaPoly_BLAKE2b"),
-%%     ClientPrivKey = <<64,168,119,119,151,194,94,141,86,245,144,220,78,53,243,231,168,216,66,199,49,148,202,117,98,40,61,109,170,37,133,122>>,
-%%     ClientPubKey  = <<115,39,86,77,44,85,192,176,202,11,4,6,194,144,127,123, 34,67,62,180,190,232,251,5,216,168,192,190,134,65,13,64>>,
-%%     ServerPubKey  = <<112,91,141,253,183,66,217,102,211,40,13,249,238,51,77,114,163,159,32,1,162,219,76,106,89,164,34,71,149,2,103,59>>,
+client_test() ->
+    TestProtocol = enoise_protocol:from_name("Noise_XK_25519_ChaChaPoly_BLAKE2b"),
+    ClientPrivKey = <<64,168,119,119,151,194,94,141,86,245,144,220,78,53,243,231,168,216,66,199,49,148,202,117,98,40,61,109,170,37,133,122>>,
+    ClientPubKey  = <<115,39,86,77,44,85,192,176,202,11,4,6,194,144,127,123, 34,67,62,180,190,232,251,5,216,168,192,190,134,65,13,64>>,
+    ServerPubKey  = <<112,91,141,253,183,66,217,102,211,40,13,249,238,51,77,114,163,159,32,1,162,219,76,106,89,164,34,71,149,2,103,59>>,
 
-%%     {ok, TcpSock} = gen_tcp:connect("localhost", 7890, [{active, false}, binary, {reuseaddr, true}], 1000),
-%%     gen_tcp:send(TcpSock, <<0,8,0,0,3>>), %% "Noise_XK_25519_ChaChaPoly_Blake2b"
+    {ok, TcpSock} = gen_tcp:connect("localhost", 7890, [{active, false}, binary, {reuseaddr, true}], 1000),
+    gen_tcp:send(TcpSock, <<0,8,0,0,3>>), %% "Noise_XK_25519_ChaChaPoly_Blake2b"
 
-%%     Opts = [ {noise, TestProtocol}
-%%            , {s, #key_pair{ pik = ClientPrivKey, puk = ClientPubKey }}
-%%            , {rs, ServerPubKey}
-%%            , {prologue, <<0,8,0,0,3>>}],
+    Opts = [ {noise, TestProtocol}
+           , {s, enoise_keypair:new(dh25519, ClientPrivKey, ClientPubKey)}
+           , {rs, enoise_keypair:new(dh25519, ServerPubKey)}
+           , {prologue, <<0,8,0,0,3>>}],
 
-%%     {ok, EConn} = enoise:connect(TcpSock, Opts),
-%%     ok = enoise:send(EConn, <<"ok\n">>),
-%%     %% receive
-%%     %%     {noise, EConn, <<"ok\n">>} -> ok
-%%     %% after 1000 -> error(timeout) end,
-%%     {ok, <<"ok\n">>} = enoise:recv(EConn, 3, 1000),
-%%     enoise:close(EConn).
+    {ok, EConn} = enoise:connect(TcpSock, Opts),
+    ok = enoise:send(EConn, <<"ok\n">>),
+    %% receive
+    %%     {noise, EConn, <<"ok\n">>} -> ok
+    %% after 1000 -> error(timeout) end,
+    {ok, <<"ok\n">>} = enoise:recv(EConn, 3, 1000),
+    enoise:close(EConn).
 
 
 %% Expects a call-in from a local echo-client (noise-c)
@@ -118,7 +118,7 @@ need_rs(Role, Protocol) ->
 %%     ServerPubKey  = <<112,91,141,253,183,66,217,102,211,40,13,249,238,51,77,114,163,159,32,1,162,219,76,106,89,164,34,71,149,2,103,59>>,
 
 %%     Opts = [ {noise, TestProtocol}
-%%            , {s, #key_pair{ pik = ServerPrivKey, puk = ServerPubKey }}
+%%            , {s, enoise_keypair:new(dh25519, ServerPrivKey, ServerPubKey)}
 %%            , {prologue, <<0,8,0,0,3>>}],
 
 %%     {ok, LSock} = gen_tcp:listen(7891, [{reuseaddr, true}, binary]),

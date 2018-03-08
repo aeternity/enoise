@@ -25,7 +25,7 @@
 -record(enoise, { pid }).
 
 -type noise_key() :: binary().
--type noise_keypair() :: term().
+-type noise_keypair() :: enoise_keypair:keypair().
 
 -type noise_options() :: [noise_option()].
 -type noise_option() :: {noise, noise_protocol_option()} %% Required
