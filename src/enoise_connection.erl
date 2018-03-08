@@ -4,7 +4,8 @@
 
 -module(enoise_connection).
 
--export([ close/1
+-export([ controlling_process/2
+        , close/1
         , recv/3
         , send/2
         , start_link/5
@@ -41,6 +42,9 @@ recv(Noise, Length, Timeout) ->
 close(Noise) ->
     gen_server:call(Noise, close).
 
+controlling_process(Noise, NewPid) ->
+    gen_server:call(Noise, {controlling_process, self(), NewPid}, 100).
+
 %% -- gen_server callbacks ---------------------------------------------------
 init([State]) ->
     {ok, State}.
@@ -52,6 +56,9 @@ handle_call({recv, _Length, _Timeout}, _From, S = #state{ active = true }) ->
     {reply, {error, active_socket}, S};
 handle_call({recv, Length, Timeout}, _From, S) ->
     {Res, S1} = handle_recv(S, Length, Timeout),
+    {reply, Res, S1};
+handle_call({controlling_process, OldPid, NewPid}, _From, S) ->
+    {Res, S1} = handle_control_change(S, OldPid, NewPid),
     {reply, Res, S1};
 handle_call(close, _From, S) ->
     {stop, normal, ok, S}.
@@ -79,6 +86,14 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %% -- Local functions --------------------------------------------------------
+handle_control_change(S = #state{ owner = Pid, tcp_sock = TcpSock }, Pid, NewPid) ->
+    case gen_tcp:controlling_process(TcpSock, NewPid) of
+        ok               -> {ok, S#state{ owner = NewPid }};
+        Err = {error, _} -> {Err, S}
+    end;
+handle_control_change(S, _OldPid, _NewPid) ->
+    {{error, not_owner}, S}.
+
 handle_data(S = #state{ rawbuf = Buf, rx = Rx }, Data) ->
     case <<Buf/binary, Data/binary>> of
         B = <<Len:16, Rest/binary>> when Len < byte_size(Rest) ->
