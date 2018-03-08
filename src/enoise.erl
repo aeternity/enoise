@@ -1,27 +1,48 @@
-%%%-------------------------------------------------------------------
-%%% @copyright (C) 2018, Aeternity Anstalt
-%%%-------------------------------------------------------------------
+%%% ------------------------------------------------------------------
+%%% @copyright 2018, Aeternity Anstalt
+%%%
+%%% @doc Module is an interface to the Noise protocol
+%%% [https://noiseprotocol.org]
+%%%
+%%% The module implements Noise over TCP (i.e. `gen_tcp') and after "upgrading"
+%%% a `gen_tcp'-socket into a `enoise'-socket it has a similar API as
+%%% `gen_tcp'.
+%%%
+%%% @end
+%%% ------------------------------------------------------------------
 
 -module(enoise).
 
 %% API exports - Mainly mimicing gen_tcp
-%% -export([ accept/1
-%%         , accept/2
-%%         , close/1
-%%         , connect/3
-%%         , connect/4
-%%         , controlling_process/2
-%%         , listen/2
-%%         , recv/2
-%%         , recv/3
-%%         , send/2
-%%         , shutdown/2 ]).
--compile([export_all, nowarn_export_all]).
+-export([ accept/2
+        , close/1
+        , connect/2
+        , controlling_process/2
+        , recv/2
+        , recv/3
+        , send/2 ]).
 
 -record(enoise, { pid }).
 
--type noise_options() :: [{atom(), term()}].
+-type noise_key() :: binary().
+-type noise_keypair() :: term().
+
+-type noise_options() :: [noise_option()].
+-type noise_option() :: {noise, noise_protocol_option()} %% Required
+                      | {e, noise_keypair()} %% Optional
+                      | {s, noise_keypair()}
+                      | {re, noise_key()}
+                      | {rs, noise_key()}
+                      | {prologue, binary()}.
+
+-type noise_protocol_option() :: enoise_protocol:protocol() | string() |
+binary().
+%% Either an instantiated Noise protocol configuration or the name of a Noise
+%% configuration (either as a string or a binary string).
+
 -opaque noise_socket() :: #enoise{}.
+%% An abstract Noise socket - holds a reference to a socket that has completed
+%% a Noise handshake.
 
 -export_type([noise_socket/0]).
 
@@ -47,22 +68,22 @@ connect(TcpSock, Options) ->
 accept(TcpSock, Options) ->
     start_handshake(TcpSock, responder, Options).
 
-%% @doc Writes `Data` to `Socket`
+%% @doc Writes `Data' to `Socket'
 %% @end
 -spec send(Socket :: noise_socket(), Data :: binary()) -> ok | {error, term()}.
 send(#enoise{ pid = Pid }, Data) ->
     enoise_connection:send(Pid, Data).
 
 %% @doc Receives a packet from a socket in passive mode. A closed socket is
-%% indicated by return value `{error, closed}`.
+%% indicated by return value `{error, closed}'.
 %%
-%% Argument `Length` denotes the number of bytes to read. If Length = 0, all
+%% Argument `Length' denotes the number of bytes to read. If Length = 0, all
 %% available bytes are returned. If Length > 0, exactly Length bytes are
 %% returned, or an error; possibly discarding less than Length bytes of data
 %% when the socket gets closed from the other side.
 %%
-%% Optional argument `Timeout` specifies a time-out in milliseconds. The
-%% default value is `infinity`.
+%% Optional argument `Timeout' specifies a time-out in milliseconds. The
+%% default value is `infinity'.
 %% @end
 -spec recv(Socket :: noise_socket(), Length :: integer()) ->
         {ok, binary()} | {error, term()}.
