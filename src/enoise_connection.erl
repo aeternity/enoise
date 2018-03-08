@@ -1,6 +1,11 @@
-%%%-------------------------------------------------------------------
-%%% @copyright (C) 2018, Aeternity Anstalt
-%%%-------------------------------------------------------------------
+%%% ------------------------------------------------------------------
+%%% @copyright 2018, Aeternity Anstalt
+%%%
+%%% @doc Module implementing a gen_server for holding a handshaked
+%%% Noise connection.
+%%%
+%%% @end
+%%% ------------------------------------------------------------------
 
 -module(enoise_connection).
 
@@ -16,6 +21,7 @@
          terminate/2, code_change/3]).
 
 -record(enoise, { pid }).
+
 -record(state, {rx, tx, owner, tcp_sock, active, buf = <<>>, rawbuf = <<>>}).
 
 %% -- API --------------------------------------------------------------------

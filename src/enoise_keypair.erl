@@ -59,6 +59,7 @@ pubkey(#kp{ pub = P }) ->
     P.
 
 %% @doc Accessor function - return the secret key of the key pair.
+%% This function will throw an error if the key pair is "public only".
 -spec seckey(KeyPair :: keypair()) -> binary().
 seckey(#kp{ sec = undefined }) ->
     error(keypair_is_public_only);

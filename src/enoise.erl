@@ -28,12 +28,18 @@
 -type noise_keypair() :: enoise_keypair:keypair().
 
 -type noise_options() :: [noise_option()].
+%% A list of Noise options is a proplist, it *must* contain a value `noise'
+%% that describes which Noise configuration to use. It is possible to give a
+%% `prologue' to the protocol. And for the protocol to work, the correct
+%% configuration of pre-defined keys (`s', `e', `rs', `re') should also be
+%% provided.
+
 -type noise_option() :: {noise, noise_protocol_option()} %% Required
-                      | {e, noise_keypair()} %% Optional
+                      | {e, noise_keypair()} %% Mandatary depending on `noise'
                       | {s, noise_keypair()}
                       | {re, noise_key()}
                       | {rs, noise_key()}
-                      | {prologue, binary()}.
+                      | {prologue, binary()}. %% Optional
 
 -type noise_protocol_option() :: enoise_protocol:protocol() | string() |
 binary().
@@ -52,6 +58,8 @@ binary().
 
 %% @doc Upgrades a gen_tcp, or equivalent, connected socket to a Noise socket,
 %% that is, performs the client-side noise handshake.
+%%
+%% {@link noise_options()} is a proplist.
 %% @end
 -spec connect(TcpSock :: gen_tcp:socket(),
               Options :: noise_options()) ->
@@ -61,6 +69,8 @@ connect(TcpSock, Options) ->
 
 %% @doc Upgrades a gen_tcp, or equivalent, connected socket to a Noise socket,
 %% that is, performs the server-side noise handshake.
+%%
+%% {@link noise_options()} is a proplist.
 %% @end
 -spec accept(TcpSock :: gen_tcp:socket(),
              Options :: noise_options()) ->
@@ -74,6 +84,12 @@ accept(TcpSock, Options) ->
 send(#enoise{ pid = Pid }, Data) ->
     enoise_connection:send(Pid, Data).
 
+%% @equiv recv(Socket, Length, infinity)
+-spec recv(Socket :: noise_socket(), Length :: integer()) ->
+        {ok, binary()} | {error, term()}.
+recv(Socket, Length) ->
+    recv(Socket, Length, infinity).
+
 %% @doc Receives a packet from a socket in passive mode. A closed socket is
 %% indicated by return value `{error, closed}'.
 %%
@@ -85,11 +101,6 @@ send(#enoise{ pid = Pid }, Data) ->
 %% Optional argument `Timeout' specifies a time-out in milliseconds. The
 %% default value is `infinity'.
 %% @end
--spec recv(Socket :: noise_socket(), Length :: integer()) ->
-        {ok, binary()} | {error, term()}.
-recv(Socket, Length) ->
-    recv(Socket, Length, infinity).
-
 -spec recv(Socket :: noise_socket(), Length :: integer(),
            Timeout :: integer() | infinity) ->
         {ok, binary()} | {error, term()}.
