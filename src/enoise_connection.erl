@@ -2,7 +2,10 @@
 %%% @copyright 2018, Aeternity Anstalt
 %%%
 %%% @doc Module implementing a gen_server for holding a handshaked
-%%% Noise connection.
+%%% Noise connection over gen_tcp.
+%%%
+%%% Some care is needed since the underlying transmission is broken up
+%%% into Noise packets, so we need some buffering.
 %%%
 %%% @end
 %%% ------------------------------------------------------------------
@@ -25,13 +28,20 @@
 -record(state, {rx, tx, owner, tcp_sock, active, buf = <<>>, rawbuf = <<>>}).
 
 %% -- API --------------------------------------------------------------------
-start_link(TcpSock, Rx, Tx, Owner, Active) ->
-    inet:setopts(TcpSock, [{active, Active}]),
-    State = #state{ rx = Rx, tx = Tx, owner = Owner,
-                    tcp_sock = TcpSock, active = Active },
+start_link(TcpSock, Rx, Tx, Owner, {Active, Buf}) ->
+    State0 = #state{ rx = Rx, tx = Tx, owner = Owner,
+                     tcp_sock = TcpSock, active = Active },
+    State = case Active of
+                true  -> State0;
+                false -> State0#state{ rawbuf = Buf }
+            end,
     case gen_server:start_link(?MODULE, [State], []) of
         {ok, Pid} ->
             ok = gen_tcp:controlling_process(TcpSock, Pid),
+            %% Changing controlling process if active requires a bit
+            %% of fiddling with already received content...
+            [ Pid ! {tcp, TcpSock, Buf} || Buf /= <<>>, Active ],
+            flush_tcp(Active, Pid, TcpSock),
             {ok, Pid};
         Err = {error, _} ->
             Err
@@ -55,6 +65,10 @@ controlling_process(Noise, NewPid) ->
 init([State]) ->
     {ok, State}.
 
+handle_call(close, _From, S) ->
+    {stop, normal, ok, S};
+handle_call(_Call, _From, S = #state{ tcp_sock = closed }) ->
+    {reply, {error, closed}, S};
 handle_call({send, Data}, _From, S) ->
     {Res, S1} = handle_send(S, Data),
     {reply, Res, S1};
@@ -65,9 +79,7 @@ handle_call({recv, Length, Timeout}, _From, S) ->
     {reply, Res, S1};
 handle_call({controlling_process, OldPid, NewPid}, _From, S) ->
     {Res, S1} = handle_control_change(S, OldPid, NewPid),
-    {reply, Res, S1};
-handle_call(close, _From, S) ->
-    {stop, normal, ok, S}.
+    {reply, Res, S1}.
 
 handle_cast(_Msg, S) ->
     {noreply, S}.
@@ -78,13 +90,13 @@ handle_info({tcp, TS, Data}, S = #state{ tcp_sock = TS }) ->
     {noreply, S2};
 handle_info({tcp_closed, TS}, S = #state{ tcp_sock = TS, active = A, owner = O }) ->
     [ O ! {tcp_closed, TS} || A ],
-    {stop, normal, S#state{ tcp_sock = undefined }};
+    {noreply, S#state{ tcp_sock = closed }};
 handle_info(Msg, S) ->
     io:format("Unexpected info: ~p\n", [Msg]),
     {noreply, S}.
 
 terminate(_Reason, #state{ tcp_sock = TcpSock }) ->
-    [ gen_tcp:close(TcpSock) || TcpSock /= undefined ],
+    [ gen_tcp:close(TcpSock) || TcpSock /= closed ],
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -102,7 +114,7 @@ handle_control_change(S, _OldPid, _NewPid) ->
 
 handle_data(S = #state{ rawbuf = Buf, rx = Rx }, Data) ->
     case <<Buf/binary, Data/binary>> of
-        B = <<Len:16, Rest/binary>> when Len < byte_size(Rest) ->
+        B = <<Len:16, Rest/binary>> when Len > byte_size(Rest) ->
             {S#state{ rawbuf = B }, []}; %% Not a full message - save it
         <<Len:16, Rest/binary>> ->
             <<Msg:Len/binary, Rest2/binary>> = Rest,
@@ -210,4 +222,13 @@ timed_recv(TcpSock, Len, TO) ->
             {ok, Diff, Data};
         Err = {error, _} ->
             Err
+    end.
+
+flush_tcp(false, _Pid, _TcpSock) ->
+    ok;
+flush_tcp(true, Pid, TcpSock) ->
+    receive {tcp, TcpSock, Data} ->
+        Pid ! {tcp, TcpSock, Data},
+        flush_tcp(true, Pid, TcpSock)
+    after 1 -> ok
     end.
