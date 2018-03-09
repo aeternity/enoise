@@ -86,27 +86,27 @@ need_rs(Role, Protocol) ->
     lists:member({in, [s]}, PreMsgs).
 
 %% Talks to local echo-server (noise-c)
-client_test() ->
-    TestProtocol = enoise_protocol:from_name("Noise_XK_25519_ChaChaPoly_BLAKE2b"),
-    ClientPrivKey = <<64,168,119,119,151,194,94,141,86,245,144,220,78,53,243,231,168,216,66,199,49,148,202,117,98,40,61,109,170,37,133,122>>,
-    ClientPubKey  = <<115,39,86,77,44,85,192,176,202,11,4,6,194,144,127,123, 34,67,62,180,190,232,251,5,216,168,192,190,134,65,13,64>>,
-    ServerPubKey  = <<112,91,141,253,183,66,217,102,211,40,13,249,238,51,77,114,163,159,32,1,162,219,76,106,89,164,34,71,149,2,103,59>>,
+%% client_test() ->
+%%     TestProtocol = enoise_protocol:from_name("Noise_XK_25519_ChaChaPoly_BLAKE2b"),
+%%     ClientPrivKey = <<64,168,119,119,151,194,94,141,86,245,144,220,78,53,243,231,168,216,66,199,49,148,202,117,98,40,61,109,170,37,133,122>>,
+%%     ClientPubKey  = <<115,39,86,77,44,85,192,176,202,11,4,6,194,144,127,123, 34,67,62,180,190,232,251,5,216,168,192,190,134,65,13,64>>,
+%%     ServerPubKey  = <<112,91,141,253,183,66,217,102,211,40,13,249,238,51,77,114,163,159,32,1,162,219,76,106,89,164,34,71,149,2,103,59>>,
 
-    {ok, TcpSock} = gen_tcp:connect("localhost", 7890, [{active, false}, binary, {reuseaddr, true}], 1000),
-    gen_tcp:send(TcpSock, <<0,8,0,0,3>>), %% "Noise_XK_25519_ChaChaPoly_Blake2b"
+%%     {ok, TcpSock} = gen_tcp:connect("localhost", 7890, [{active, false}, binary, {reuseaddr, true}], 1000),
+%%     gen_tcp:send(TcpSock, <<0,8,0,0,3>>), %% "Noise_XK_25519_ChaChaPoly_Blake2b"
 
-    Opts = [ {noise, TestProtocol}
-           , {s, enoise_keypair:new(dh25519, ClientPrivKey, ClientPubKey)}
-           , {rs, enoise_keypair:new(dh25519, ServerPubKey)}
-           , {prologue, <<0,8,0,0,3>>}],
+%%     Opts = [ {noise, TestProtocol}
+%%            , {s, enoise_keypair:new(dh25519, ClientPrivKey, ClientPubKey)}
+%%            , {rs, enoise_keypair:new(dh25519, ServerPubKey)}
+%%            , {prologue, <<0,8,0,0,3>>}],
 
-    {ok, EConn} = enoise:connect(TcpSock, Opts),
-    ok = enoise:send(EConn, <<"ok\n">>),
-    %% receive
-    %%     {noise, EConn, <<"ok\n">>} -> ok
-    %% after 1000 -> error(timeout) end,
-    {ok, <<"ok\n">>} = enoise:recv(EConn, 3, 1000),
-    enoise:close(EConn).
+%%     {ok, EConn} = enoise:connect(TcpSock, Opts),
+%%     ok = enoise:send(EConn, <<"ok\n">>),
+%%     %% receive
+%%     %%     {noise, EConn, <<"ok\n">>} -> ok
+%%     %% after 1000 -> error(timeout) end,
+%%     {ok, <<"ok\n">>} = enoise:recv(EConn, 3, 1000),
+%%     enoise:close(EConn).
 
 
 %% Expects a call-in from a local echo-client (noise-c)
