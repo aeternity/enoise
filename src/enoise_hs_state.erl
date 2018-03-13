@@ -26,7 +26,8 @@
                   , dh = dh25519      :: noise_dh()
                   , msgs = []         :: [enoise_protocol:noise_msg()] }).
 
--export_type([noise_dh/0, noise_role/0, noise_token/0]).
+-opaque state() :: #noise_hs{}.
+-export_type([noise_dh/0, noise_role/0, noise_token/0, state/0]).
 
 -spec init(Protocol :: string() | enoise_protocol:protocol(),
            Role :: noise_role(), Prologue :: binary(),
