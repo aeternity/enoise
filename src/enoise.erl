@@ -66,6 +66,12 @@ binary().
 %% Noise communication state - used to parameterize a handshake. Consists of a
 %% send function one receive function and an internal state.
 
+-type noise_split_state() :: #{ rx := enoise_cipher_state:state(),
+                                tx := enoise_cipher_state:state(),
+                                hs_hash := binary() }.
+%% Return value from the final `split' operation. Provides a CipherState for
+%% receiving and a CipherState transmission. Also includes the final handshake
+%% hash for channel binding.
 
 -opaque noise_socket() :: #enoise{}.
 %% An abstract Noise socket - holds a reference to a socket that has completed
@@ -81,14 +87,20 @@ binary().
 %% @end
 -spec handshake(Options :: noise_options(),
                 Role :: enoise_hs_state:noise_role()) ->
-          {in, enoise_hs_state:state()}
-        | {out, binary(), enoise_hs_state:state()}
-        | {done, enoise_hs_state:state()}
-        | {error, term()}.
+        {ok, enoise_hs_state:state()} | {error, term()}.
 handshake(Options, Role) ->
     HState = create_hstate(Options, Role),
-    step_handshake(HState, <<>>).
+    {ok, HState}.
 
+%% @doc Do a step (either `{send, Payload}', `{rcvd, EncryptedData}',
+%% or `done')
+%% @end
+-spec step_handshake(HState :: enoise_hs_state:state(),
+                     Data :: {rcvd, binary()} | {send, binary()}) ->
+          {ok, send, binary(), enoise_hs_state:state()}
+        | {ok, rcvd, binary(), enoise_hs_state:state()}
+        | {ok, done, map()}
+        | {error, term()}.
 step_handshake(HState, Data) ->
     do_step_handshake(HState, Data).
 
@@ -196,17 +208,22 @@ hs_send_msg(CS = #{ send_msg := Send, state := S }, Data) ->
     end.
 
 do_step_handshake(HState, Data) ->
-    case enoise_hs_state:next_message(HState) of
-        in when Data == <<>> ->
-            {in, HState};
-        in ->
-            {ok, HState1, _Msg} = enoise_hs_state:read_message(HState, Data), %% TODO: error handling
-            do_step_handshake(HState1, <<>>);
-        out ->
-            {ok, HState1, Msg} = enoise_hs_state:write_message(HState, <<>>),
-            {out, Msg, HState1};
-        done ->
-            {done, enoise_hs_state:finalize(HState)}
+    case {enoise_hs_state:next_message(HState), Data} of
+        {in, {rcvd, Encrypted}} ->
+            case enoise_hs_state:read_message(HState, Encrypted) of
+                {ok, HState1, Msg} ->
+                    {ok, rcvd, Msg, HState1};
+                Err = {error, _} ->
+                    Err
+            end;
+        {out, {send, Payload}} ->
+            {ok, HState1, Msg} = enoise_hs_state:write_message(HState, Payload),
+            {ok, send, Msg, HState1};
+        {done, done} ->
+            {ok, Res} = enoise_hs_state:finalize(HState),
+            {ok, done, Res};
+        {Next, _} ->
+            {error, {invalid_step, expected, Next, got, Data}}
     end.
 
 %% -- gen_tcp specific functions ---------------------------------------------
