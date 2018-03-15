@@ -101,7 +101,7 @@ noise_test(Conf, SKP, CKP) ->
     {ok, TcpSock} = gen_tcp:connect("localhost", Port, [{active, once}, binary, {reuseaddr, true}], 100),
 
     Opts = [{noise, Protocol}, {s, CKP}] ++ [{rs, SKP} || need_rs(initiator, Conf) ],
-    {ok, EConn} = enoise:connect(TcpSock, Opts),
+    {ok, EConn, _} = enoise:connect(TcpSock, Opts),
 
     ok = enoise:send(EConn, <<"Hello World!">>),
     receive
@@ -131,7 +131,7 @@ echo_srv(Port, Protocol, SKP, CPub) ->
     {ok, TcpSock} = gen_tcp:accept(LSock, 500),
 
     Opts = [{noise, Protocol}, {s, SKP}] ++  [{rs, CPub} || need_rs(responder, Protocol)],
-    {ok, EConn} = enoise:accept(TcpSock, Opts),
+    {ok, EConn, _} = enoise:accept(TcpSock, Opts),
 
     gen_tcp:close(LSock),
 

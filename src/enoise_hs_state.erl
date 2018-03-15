@@ -8,7 +8,12 @@
 
 -module(enoise_hs_state).
 
--export([finalize/1, init/4, next_message/1, read_message/2, write_message/2]).
+-export([ finalize/1
+        , init/4
+        , next_message/1
+        , read_message/2
+        , remote_keys/1
+        , write_message/2]).
 
 -include("enoise.hrl").
 
@@ -49,12 +54,13 @@ init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
                    ({in, [e]}, HS0)  -> mix_hash(HS0, enoise_keypair:pubkey(RE))
                 end, HS, PreMsgs).
 
-finalize(#noise_hs{ msgs = [], ss = SS, role = Role }) ->
+finalize(HS = #noise_hs{ msgs = [], ss = SS, role = Role }) ->
     {C1, C2} = enoise_sym_state:split(SS),
     HSHash   = enoise_sym_state:h(SS),
+    Final    = #{ hs_hash => HSHash, final_state => HS },
     case Role of
-        initiator -> {ok, #{ tx => C1, rx => C2, hs_hash => HSHash }};
-        responder -> {ok, #{ rx => C1, tx => C2, hs_hash => HSHash }}
+        initiator -> {ok, Final#{ tx => C1, rx => C2 }};
+        responder -> {ok, Final#{ rx => C1, tx => C2 }}
     end;
 finalize(_) ->
     error({bad_state, finalize}).
@@ -71,6 +77,9 @@ write_message(HS = #noise_hs{ msgs = [{out, Msg} | Msgs] }, PayLoad) ->
 read_message(HS = #noise_hs{ msgs = [{in, Msg} | Msgs] }, Message) ->
     {HS1, RestBuf1} = read_message(HS#noise_hs{ msgs = Msgs }, Msg, Message),
     decrypt_and_hash(HS1, RestBuf1).
+
+remote_keys(#noise_hs{ rs = RS }) ->
+    RS.
 
 write_message(HS, [], MsgBuf) ->
     {HS, MsgBuf};

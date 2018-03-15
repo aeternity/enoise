@@ -126,7 +126,7 @@ handshake(Options, Role, ComState) ->
 %% @end
 -spec connect(TcpSock :: gen_tcp:socket(),
               Options :: noise_options()) ->
-                    {ok, noise_socket()} | {error, term()}.
+                    {ok, noise_socket(), enoise_hs_state:state()} | {error, term()}.
 connect(TcpSock, Options) ->
     tcp_handshake(TcpSock, initiator, Options).
 
@@ -236,9 +236,9 @@ tcp_handshake(TcpSock, Role, Options) ->
                           state    => {TcpSock, Active, <<>>} },
 
             case handshake(Options, Role, ComState) of
-                {ok, #{ rx := Rx, tx := Tx }, #{ state := {_, _, Buf} }} ->
+                {ok, #{ rx := Rx, tx := Tx, final_state := FState }, #{ state := {_, _, Buf} }} ->
                     {ok, Pid} = enoise_connection:start_link(TcpSock, Rx, Tx, self(), {Active, Buf}),
-                    {ok, #enoise{ pid = Pid }};
+                    {ok, #enoise{ pid = Pid }, FState};
                 Err = {error, _} ->
                     Err
             end;
