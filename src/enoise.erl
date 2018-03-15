@@ -99,7 +99,7 @@ handshake(Options, Role) ->
                      Data :: {rcvd, binary()} | {send, binary()}) ->
           {ok, send, binary(), enoise_hs_state:state()}
         | {ok, rcvd, binary(), enoise_hs_state:state()}
-        | {ok, done, map()}
+        | {ok, done, noise_split_state()}
         | {error, term()}.
 step_handshake(HState, Data) ->
     do_step_handshake(HState, Data).
@@ -109,7 +109,7 @@ step_handshake(HState, Data) ->
 -spec handshake(Options :: noise_options(),
                 Role :: enoise_hs_state:noise_role(),
                 ComState :: noise_com_state()) ->
-        {ok, map(), noise_com_state()} | {error, term()}.
+        {ok, noise_split_state(), noise_com_state()} | {error, term()}.
 handshake(Options, Role, ComState) ->
     HState = create_hstate(Options, Role),
     Timeout = proplists:get_value(timeout, Options, infinity),
