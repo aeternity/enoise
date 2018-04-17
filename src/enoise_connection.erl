@@ -37,12 +37,16 @@ start_link(TcpSock, Rx, Tx, Owner, {Active0, Buf}) ->
                     tcp_sock = TcpSock, active = Active },
     case gen_server:start_link(?MODULE, [State], []) of
         {ok, Pid} ->
-            ok = gen_tcp:controlling_process(TcpSock, Pid),
-            %% Changing controlling process require a bit of
-            %% fiddling with already received and delivered content...
-            [ Pid ! {tcp, TcpSock, Buf} || Buf /= <<>> ],
-            flush_tcp(Pid, TcpSock),
-            {ok, Pid};
+            case gen_tcp:controlling_process(TcpSock, Pid) of
+                ok ->
+                    %% Changing controlling process require a bit of
+                    %% fiddling with already received and delivered content...
+                    [ Pid ! {tcp, TcpSock, Buf} || Buf /= <<>> ],
+                    flush_tcp(Pid, TcpSock),
+                    {ok, Pid};
+                Err = {error, _} ->
+                    Err
+            end;
         Err = {error, _} ->
             Err
     end.

@@ -237,8 +237,10 @@ tcp_handshake(TcpSock, Role, Options) ->
 
             case handshake(Options, Role, ComState) of
                 {ok, #{ rx := Rx, tx := Tx, final_state := FState }, #{ state := {_, _, Buf} }} ->
-                    {ok, Pid} = enoise_connection:start_link(TcpSock, Rx, Tx, self(), {Active, Buf}),
-                    {ok, #enoise{ pid = Pid }, FState};
+                    case enoise_connection:start_link(TcpSock, Rx, Tx, self(), {Active, Buf}) of
+                        {ok, Pid} -> {ok, #enoise{ pid = Pid }, FState};
+                        Err = {error, _} -> Err
+                    end;
                 Err = {error, _} ->
                     Err
             end;
