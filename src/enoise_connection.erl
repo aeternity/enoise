@@ -45,6 +45,7 @@ start_link(TcpSock, Rx, Tx, Owner, {Active0, Buf}) ->
                     flush_tcp(Pid, TcpSock),
                     {ok, Pid};
                 Err = {error, _} ->
+                    close(Pid),
                     Err
             end;
         Err = {error, _} ->
