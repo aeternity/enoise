@@ -117,7 +117,7 @@ handle_control_change(S, _OldPid, _NewPid) ->
 handle_active(S = #state{ owner = Pid, tcp_sock = TcpSock }, Pid, Active) ->
     case Active of
         true ->
-            gen_tcp:setopts(TcpSock, [{active, true}]),
+            inet:setopts(TcpSock, [{active, true}]),
             {ok, handle_msgs(S#state{ active = true })};
         once ->
             S1 = handle_msgs(S#state{ active = {once, false} }),
