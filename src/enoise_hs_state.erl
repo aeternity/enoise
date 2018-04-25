@@ -36,7 +36,7 @@
 
 -spec init(Protocol :: string() | enoise_protocol:protocol(),
            Role :: noise_role(), Prologue :: binary(),
-           Keys :: term()) -> #noise_hs{}.
+           Keys :: term()) -> state().
 init(ProtocolName, Role, Prologue, Keys) when is_list(ProtocolName) ->
     init(enoise_protocol:from_name(ProtocolName), Role, Prologue, Keys);
 init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
@@ -54,6 +54,7 @@ init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
                    ({in, [e]}, HS0)  -> mix_hash(HS0, enoise_keypair:pubkey(RE))
                 end, HS, PreMsgs).
 
+-spec finalize(HS :: state()) -> {ok, map()} | {error, term()}.
 finalize(HS = #noise_hs{ msgs = [], ss = SS, role = Role }) ->
     {C1, C2} = enoise_sym_state:split(SS),
     HSHash   = enoise_sym_state:h(SS),
@@ -65,15 +66,19 @@ finalize(HS = #noise_hs{ msgs = [], ss = SS, role = Role }) ->
 finalize(_) ->
     error({bad_state, finalize}).
 
+-spec next_message(HS :: state()) -> in | out | done.
 next_message(#noise_hs{ msgs = [{Dir, _} | _] }) -> Dir;
 next_message(_) -> done.
 
+-spec write_message(HS :: state(), PayLoad :: binary()) -> {ok, state(), binary()}.
 write_message(HS = #noise_hs{ msgs = [{out, Msg} | Msgs] }, PayLoad) ->
     {HS1, MsgBuf1} = write_message(HS#noise_hs{ msgs = Msgs }, Msg, <<>>),
     {ok, HS2, MsgBuf2} = encrypt_and_hash(HS1, PayLoad),
     MsgBuf = <<MsgBuf1/binary, MsgBuf2/binary>>,
     {ok, HS2, MsgBuf}.
 
+-spec read_message(HS :: state(), Message :: binary()) ->
+        {ok, state(), binary()} | {error, term()}.
 read_message(HS = #noise_hs{ msgs = [{in, Msg} | Msgs] }, Message) ->
     {HS1, RestBuf1} = read_message(HS#noise_hs{ msgs = Msgs }, Msg, Message),
     decrypt_and_hash(HS1, RestBuf1).
