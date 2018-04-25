@@ -181,8 +181,12 @@ do_handshake(HState, ComState, Timeout) ->
         in ->
             case hs_recv_msg(ComState, Timeout) of
                 {ok, Data, ComState1} ->
-                    {ok, HState1, _Msg} = enoise_hs_state:read_message(HState, Data),
-                    do_handshake(HState1, ComState1, Timeout);
+                    case enoise_hs_state:read_message(HState, Data) of
+                        {ok, HState1, _Msg} ->
+                            do_handshake(HState1, ComState1, Timeout);
+                        Err = {error, _} ->
+                            Err
+                    end;
                 Err = {error, _} ->
                     Err
             end;

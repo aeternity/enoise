@@ -160,8 +160,11 @@ encrypt_and_hash(HS = #noise_hs{ ss = SS0 }, PlainText) ->
     {ok, HS#noise_hs{ ss = SS1 }, CipherText}.
 
 decrypt_and_hash(HS = #noise_hs{ ss = SS0 }, CipherText) ->
-    {ok, SS1, PlainText} = enoise_sym_state:decrypt_and_hash(SS0, CipherText),
-    {ok, HS#noise_hs{ ss = SS1 }, PlainText}.
+    case enoise_sym_state:decrypt_and_hash(SS0, CipherText) of
+        {ok, SS1, PlainText} ->
+            {ok, HS#noise_hs{ ss = SS1 }, PlainText};
 
-
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
