@@ -272,18 +272,23 @@ create_hstate(Options, Role) ->
                          Prologue, {S, E, RS, RE}).
 
 check_gen_tcp(TcpSock) ->
-    {ok, TcpOpts} = inet:getopts(TcpSock, [mode, packet, active, header, packet_size]),
-    Packet = proplists:get_value(packet, TcpOpts, 0),
-    Active = proplists:get_value(active, TcpOpts, 0),
-    Header = proplists:get_value(header, TcpOpts, 0),
-    PSize  = proplists:get_value(packet_size, TcpOpts, undefined),
-    Mode   = proplists:get_value(mode, TcpOpts, binary),
-    case (Packet == 0 orelse Packet == raw) andalso (Active == true orelse Active == once)
-        andalso Header == 0 andalso PSize == 0 andalso Mode == binary of
-        true ->
-            gen_tcp:controlling_process(TcpSock, self());
-        false ->
-            {error, {invalid_tcp_options, TcpOpts}}
+    case inet:getopts(TcpSock, [mode, packet, active, header, packet_size]) of
+        {ok, TcpOpts} ->
+            Packet = proplists:get_value(packet, TcpOpts, 0),
+            Active = proplists:get_value(active, TcpOpts, 0),
+            Header = proplists:get_value(header, TcpOpts, 0),
+            PSize  = proplists:get_value(packet_size, TcpOpts, undefined),
+            Mode   = proplists:get_value(mode, TcpOpts, binary),
+            case (Packet == 0 orelse Packet == raw)
+                    andalso (Active == true orelse Active == once)
+                    andalso Header == 0 andalso PSize == 0 andalso Mode == binary of
+                true ->
+                    gen_tcp:controlling_process(TcpSock, self());
+                false ->
+                    {error, {invalid_tcp_options, TcpOpts}}
+            end;
+        Err = {error, _} ->
+            Err
     end.
 
 gen_tcp_snd_msg(S = {TcpSock, _, _}, Msg) ->
