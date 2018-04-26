@@ -293,8 +293,10 @@ check_gen_tcp(TcpSock) ->
 
 gen_tcp_snd_msg(S = {TcpSock, _, _}, Msg) ->
     Len = byte_size(Msg),
-    ok = gen_tcp:send(TcpSock, <<Len:16, Msg/binary>>),
-    {ok, S}.
+    case gen_tcp:send(TcpSock, <<Len:16, Msg/binary>>) of
+        ok               -> {ok, S};
+        Err = {error, _} -> Err
+    end.
 
 gen_tcp_rcv_msg({TcpSock, Active, Buf}, Timeout) ->
     receive {tcp, TcpSock, Data} ->
