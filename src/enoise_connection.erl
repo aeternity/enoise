@@ -25,7 +25,7 @@
 
 -record(enoise, { pid }).
 
--record(state, {rx, tx, owner, tcp_sock, active, msgbuf = [], rawbuf = <<>>}).
+-record(state, {rx, tx, owner, owner_ref, tcp_sock, active, msgbuf = [], rawbuf = <<>>}).
 
 %% -- API --------------------------------------------------------------------
 start_link(TcpSock, Rx, Tx, Owner, {Active0, Buf}) ->
@@ -33,8 +33,10 @@ start_link(TcpSock, Rx, Tx, Owner, {Active0, Buf}) ->
                  true -> true;
                  once -> {once, false}
              end,
-    State = #state{ rx = Rx, tx = Tx, owner = Owner,
+    OwnerRef = erlang:monitor(process, Owner),
+    State = #state{ rx = Rx, tx = Tx, owner = Owner, owner_ref = OwnerRef,
                     tcp_sock = TcpSock, active = Active },
+
     case gen_server:start_link(?MODULE, [State], []) of
         {ok, Pid} ->
             case gen_tcp:controlling_process(TcpSock, Pid) of
@@ -99,12 +101,19 @@ handle_info({tcp, TS, Data}, S = #state{ tcp_sock = TS, owner = O }) ->
 handle_info({tcp_closed, TS}, S = #state{ tcp_sock = TS, owner = O }) ->
     O ! {tcp_closed, TS},
     {noreply, S#state{ tcp_sock = closed }};
-handle_info(Msg, S) ->
-    io:format("Unexpected info: ~p\n", [Msg]),
+handle_info({'DOWN', OwnerRef, process, _, normal},
+            S = #state { tcp_sock = TS, owner_ref = OwnerRef }) ->
+    gen_tcp:close(TS),
+    {stop, normal, S#state{ tcp_sock = closed, owner_ref = undefined }};
+handle_info({'DOWN', _, _, _, _}, S) ->
+    %% Ignore non-normal monitor messages - we are linked.
+    {noreply, S};
+handle_info(_Msg, S) ->
     {noreply, S}.
 
-terminate(_Reason, #state{ tcp_sock = TcpSock }) ->
+terminate(_Reason, #state{ tcp_sock = TcpSock, owner_ref = ORef }) ->
     [ gen_tcp:close(TcpSock) || TcpSock /= closed ],
+    [ erlang:demonitor(ORef, [flush]) || ORef /= undefined ],
     ok.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -112,11 +121,10 @@ code_change(_OldVsn, State, _Extra) ->
 
 
 %% -- Local functions --------------------------------------------------------
-handle_control_change(S = #state{ owner = Pid, tcp_sock = TcpSock }, Pid, NewPid) ->
-    case gen_tcp:controlling_process(TcpSock, NewPid) of
-        ok               -> {ok, S#state{ owner = NewPid }};
-        Err = {error, _} -> {Err, S}
-    end;
+handle_control_change(S = #state{ owner = Pid, owner_ref = OldRef }, Pid, NewPid) ->
+    NewRef = erlang:monitor(process, NewPid),
+    erlang:demonitor(OldRef, [flush]),
+    {ok, S#state{ owner = NewPid, owner_ref = NewRef }};
 handle_control_change(S, _OldPid, _NewPid) ->
     {{error, not_owner}, S}.
 
