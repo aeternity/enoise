@@ -85,11 +85,17 @@ handle_call({active, Pid, NewActive}, _From, S) ->
 handle_cast(_Msg, S) ->
     {noreply, S}.
 
-handle_info({tcp, TS, Data}, S = #state{ tcp_sock = TS }) ->
-    {S1, Msgs} = handle_data(S, Data),
-    S2 = handle_msgs(S1#state{ msgbuf = S1#state.msgbuf ++ Msgs }),
-    set_active(S2),
-    {noreply, S2};
+handle_info({tcp, TS, Data}, S = #state{ tcp_sock = TS, owner = O }) ->
+    try
+        {S1, Msgs} = handle_data(S, Data),
+        S2 = handle_msgs(S1#state{ msgbuf = S1#state.msgbuf ++ Msgs }),
+        set_active(S2),
+        {noreply, S2}
+    catch error:{enoise_error, _} ->
+        %% We are not likely to recover, but leave the decision to upstream
+        O ! {enoise_error, TS, decrypt_error},
+        {noreply, S}
+    end;
 handle_info({tcp_closed, TS}, S = #state{ tcp_sock = TS, owner = O }) ->
     O ! {tcp_closed, TS},
     {noreply, S#state{ tcp_sock = closed }};
