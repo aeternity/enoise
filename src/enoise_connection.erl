@@ -160,8 +160,10 @@ handle_msgs(S = #state{ msgbuf = [Msg | Msgs], active = {once, Delivered}, owner
 
 handle_send(S = #state{ tcp_sock = TcpSock, tx = Tx }, Data) ->
     {ok, Tx1, Msg} = enoise_cipher_state:encrypt_with_ad(Tx, <<>>, Data),
-    gen_tcp:send(TcpSock, <<(byte_size(Msg)):16, Msg/binary>>),
-    {ok, S#state{ tx = Tx1 }}.
+    case gen_tcp:send(TcpSock, <<(byte_size(Msg)):16, Msg/binary>>) of
+        ok               -> {ok, S#state{ tx = Tx1 }};
+        Err = {error, _} -> {Err, S}
+    end.
 
 set_active(#state{ msgbuf = [], active = {once, _}, tcp_sock = TcpSock }) ->
     inet:setopts(TcpSock, [{active, once}]);
