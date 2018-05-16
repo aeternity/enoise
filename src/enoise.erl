@@ -192,8 +192,12 @@ do_handshake(HState, ComState, Timeout) ->
             end;
         out ->
             {ok, HState1, Msg} = enoise_hs_state:write_message(HState, <<>>),
-            {ok, ComState1} = hs_send_msg(ComState, Msg),
-            do_handshake(HState1, ComState1, Timeout);
+            case hs_send_msg(ComState, Msg) of
+                {ok, ComState1} ->
+                    do_handshake(HState1, ComState1, Timeout);
+                Err = {error, _} ->
+                    Err
+            end;
         done ->
             {ok, Res} = enoise_hs_state:finalize(HState),
             {ok, Res, ComState}
