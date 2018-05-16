@@ -234,19 +234,25 @@ do_step_handshake(HState, Data) ->
 tcp_handshake(TcpSock, Role, Options) ->
     case check_gen_tcp(TcpSock) of
         ok ->
-            {ok, [{active, Active}]} = inet:getopts(TcpSock, [active]),
-            ComState = #{ recv_msg => fun gen_tcp_rcv_msg/2,
-                          send_msg => fun gen_tcp_snd_msg/2,
-                          state    => {TcpSock, Active, <<>>} },
-
-            case handshake(Options, Role, ComState) of
-                {ok, #{ rx := Rx, tx := Tx, final_state := FState }, #{ state := {_, _, Buf} }} ->
-                    case enoise_connection:start_link(TcpSock, Rx, Tx, self(), {Active, Buf}) of
-                        {ok, Pid} -> {ok, #enoise{ pid = Pid }, FState};
-                        Err = {error, _} -> Err
-                    end;
+            case inet:getopts(TcpSock, [active]) of
+                {ok, [{active, Active}]} ->
+                    do_tcp_handshake(Options, Role, TcpSock, Active);
                 Err = {error, _} ->
                     Err
+            end;
+        Err = {error, _} ->
+            Err
+    end.
+
+do_tcp_handshake(Options, Role, TcpSock, Active) ->
+    ComState = #{ recv_msg => fun gen_tcp_rcv_msg/2,
+                  send_msg => fun gen_tcp_snd_msg/2,
+                  state    => {TcpSock, Active, <<>>} },
+    case handshake(Options, Role, ComState) of
+        {ok, #{ rx := Rx, tx := Tx, final_state := FState }, #{ state := {_, _, Buf} }} ->
+            case enoise_connection:start_link(TcpSock, Rx, Tx, self(), {Active, Buf}) of
+                {ok, Pid} -> {ok, #enoise{ pid = Pid }, FState};
+                Err = {error, _} -> Err
             end;
         Err = {error, _} ->
             Err
