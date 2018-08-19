@@ -81,6 +81,15 @@ noise_dh25519_test_() ->
         end
     }.
 
+noise_monitor_test_() ->
+    {setup,
+        fun() -> setup_dh25519() end,
+        fun(_X) -> ok end,
+        fun({[T|Tests] = _Tests, SKP, CKP}) ->
+                [ {T, fun() -> noise_monitor_test(T, SKP, CKP) end} ]
+        end
+    }.
+
 setup_dh25519() ->
     %% Generate a static key-pair for Client and Server
     SrvKeyPair = enoise_keypair:new(dh25519),
@@ -93,6 +102,52 @@ setup_dh25519() ->
     {Configurations, SrvKeyPair, CliKeyPair}.
 
 noise_test(Conf, SKP, CKP) ->
+    #{econn := EConn, echo_srv := EchoSrv} = noise_test_run(Conf, SKP, CKP),
+    enoise:close(EConn),
+    echo_srv_stop(EchoSrv),
+    ok.
+
+noise_test_run(Conf, SKP, CKP) ->
+    {Pid, MRef} = spawn_monitor_proxy(
+                    fun() -> noise_test_run_(Conf, SKP, CKP) end),
+    receive
+        {Pid, #{} = Info} ->
+            Info#{proxy => Pid, proxy_mref => MRef}
+    after 5000 ->
+            erlang:error(timeout)
+    end.
+
+spawn_monitor_proxy(F) ->
+    Me = self(),
+    spawn_monitor(fun() ->
+                          MRef = erlang:monitor(process, Me),
+                          Res = F(),
+                          Me ! {self(), Res},
+                          proxy_loop(Me, MRef)
+                  end).
+
+proxy_loop(Parent, MRef) ->
+    receive
+        {Parent, Ref, F} when is_function(F, 0) ->
+            Parent ! {Ref, F()},
+            proxy_loop(Parent, MRef);
+        {'DOWN', MRef, process, Parent, _} ->
+            done
+    end.
+
+proxy_exec(P, F) when is_function(F, 0) ->
+    R = erlang:monitor(process, P),
+    P ! {self(), R, F},
+    receive
+        {R, Res} ->
+            Res;
+        {'DOWN', R, _, _, Reason} ->
+            erlang:error(Reason)
+    after 5000 ->
+            erlang:error(timeout)
+    end.
+
+noise_test_run_(Conf, SKP, CKP) ->
     Protocol = enoise_protocol:from_name(Conf),
     Port     = 4556,
 
@@ -114,10 +169,21 @@ noise_test(Conf, SKP, CKP) ->
     receive
         {noise, _, <<"Goodbye!">>} -> ok
     after 100 -> error(timeout) end,
+    #{ econn => EConn
+     , tcp_sock => TcpSock
+     , echo_srv => EchoSrv }.
 
-    enoise:close(EConn),
-    echo_srv_stop(EchoSrv),
-    ok.
+noise_monitor_test(Conf, SKP, CKP) ->
+    #{ econn := {enoise, EConnPid}
+     , proxy := Proxy
+     , tcp_sock := TcpSock } = noise_test_run(Conf, SKP, CKP),
+    try proxy_exec(Proxy, fun() -> exit(normal) end)
+    catch
+        error:normal ->
+            receive after 100 ->
+                            false = is_process_alive(EConnPid)
+                    end
+    end.
 
 echo_srv_start(Port, Protocol, SKP, CPub) ->
     Pid = spawn(fun() -> echo_srv(Port, Protocol, SKP, CPub) end),

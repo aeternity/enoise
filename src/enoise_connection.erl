@@ -33,8 +33,7 @@ start_link(TcpSock, Rx, Tx, Owner, {Active0, Buf}) ->
                  true -> true;
                  once -> {once, false}
              end,
-    OwnerRef = erlang:monitor(process, Owner),
-    State = #state{ rx = Rx, tx = Tx, owner = Owner, owner_ref = OwnerRef,
+    State = #state{ rx = Rx, tx = Tx, owner = Owner,
                     tcp_sock = TcpSock, active = Active },
 
     case gen_server:start_link(?MODULE, [State], []) of
@@ -67,8 +66,9 @@ controlling_process(Noise, NewPid) ->
     gen_server:call(Noise, {controlling_process, self(), NewPid}, 100).
 
 %% -- gen_server callbacks ---------------------------------------------------
-init([State]) ->
-    {ok, State}.
+init([#state{owner = Owner} = State]) ->
+    OwnerRef = erlang:monitor(process, Owner),
+    {ok, State#state{owner_ref = OwnerRef}}.
 
 handle_call(close, _From, S) ->
     {stop, normal, ok, S};
@@ -103,7 +103,7 @@ handle_info({tcp_closed, TS}, S = #state{ tcp_sock = TS, owner = O }) ->
     {noreply, S#state{ tcp_sock = closed }};
 handle_info({'DOWN', OwnerRef, process, _, normal},
             S = #state { tcp_sock = TS, owner_ref = OwnerRef }) ->
-    gen_tcp:close(TS),
+    close_tcp(TS),
     {stop, normal, S#state{ tcp_sock = closed, owner_ref = undefined }};
 handle_info({'DOWN', _, _, _, _}, S) ->
     %% Ignore non-normal monitor messages - we are linked.
@@ -190,3 +190,8 @@ flush_tcp(Pid, TcpSock) ->
         flush_tcp(Pid, TcpSock)
     after 1 -> ok
     end.
+
+close_tcp(closed) ->
+    ok;
+close_tcp(Sock) ->
+    gen_tcp:close(Sock).
