@@ -1,6 +1,6 @@
 {application, enoise,
  [{description, "An Erlang implementation of the Noise protocol"},
-  {vsn, "0.1.0"},
+  {vsn, "1.0.0"},
   {registered, []},
   {applications,
    [kernel,
@@ -9,8 +9,7 @@
    ]},
   {env,[]},
   {modules, []},
-
-  {maintainers, []},
-  {licenses, []},
-  {links, []}
+  {maintainers, ["Hans Svensson"]},
+  {licenses, ["ISC"]},
+  {links, [{"Github", "https://github.com/aeternity/enoise"}]}
  ]}.
