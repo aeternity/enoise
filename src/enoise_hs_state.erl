@@ -80,8 +80,10 @@ write_message(HS = #noise_hs{ msgs = [{out, Msg} | Msgs] }, PayLoad) ->
 -spec read_message(HS :: state(), Message :: binary()) ->
         {ok, state(), binary()} | {error, term()}.
 read_message(HS = #noise_hs{ msgs = [{in, Msg} | Msgs] }, Message) ->
-    {HS1, RestBuf1} = read_message(HS#noise_hs{ msgs = Msgs }, Msg, Message),
-    decrypt_and_hash(HS1, RestBuf1).
+    case read_message(HS#noise_hs{ msgs = Msgs }, Msg, Message) of
+        {ok, HS1, RestBuf1}  -> decrypt_and_hash(HS1, RestBuf1);
+        Err = {error, _} -> Err
+    end.
 
 remote_keys(#noise_hs{ rs = RS }) ->
     RS.
@@ -93,10 +95,12 @@ write_message(HS, [Token | Tokens], MsgBuf0) ->
     write_message(HS1, Tokens, <<MsgBuf0/binary, MsgBuf1/binary>>).
 
 read_message(HS, [], Data) ->
-    {HS, Data};
+    {ok, HS, Data};
 read_message(HS, [Token | Tokens], Data0) ->
-    {HS1, Data1} = read_token(HS, Token, Data0),
-    read_message(HS1, Tokens, Data1).
+    case read_token(HS, Token, Data0) of
+        {ok, HS1, Data1} -> read_message(HS1, Tokens, Data1);
+        Err = {error, _} -> Err
+    end.
 
 write_token(HS = #noise_hs{ e = undefined }, e) ->
     E = new_key_pair(HS),
@@ -115,21 +119,33 @@ write_token(HS, Token) ->
 
 read_token(HS = #noise_hs{ re = undefined, dh = DH }, e, Data0) ->
     DHLen = enoise_crypto:dhlen(DH),
-    <<REPub:DHLen/binary, Data1/binary>> = Data0,
-    RE = enoise_keypair:new(DH, REPub),
-    {mix_hash(HS#noise_hs{ re = RE }, REPub), Data1};
+    case Data0 of
+        <<REPub:DHLen/binary, Data1/binary>> ->
+            RE = enoise_keypair:new(DH, REPub),
+            {ok, mix_hash(HS#noise_hs{ re = RE }, REPub), Data1};
+        _ ->
+            {error, {bad_data, {failed_to_read_token, e, DHLen}}}
+    end;
 read_token(HS = #noise_hs{ rs = undefined, dh = DH }, s, Data0) ->
     DHLen = case has_key(HS) of
         true  -> enoise_crypto:dhlen(DH) + 16;
         false -> enoise_crypto:dhlen(DH)
     end,
-    <<Temp:DHLen/binary, Data1/binary>> = Data0,
-    {ok, HS1, RSPub} = decrypt_and_hash(HS, Temp),
-    RS = enoise_keypair:new(DH, RSPub),
-    {HS1#noise_hs{ rs = RS }, Data1};
+    case Data0 of
+        <<Temp:DHLen/binary, Data1/binary>> ->
+            case decrypt_and_hash(HS, Temp) of
+                {ok, HS1, RSPub} ->
+                    RS = enoise_keypair:new(DH, RSPub),
+                    {ok, HS1#noise_hs{ rs = RS }, Data1};
+                Err = {error, _} ->
+                    Err
+            end;
+        _ ->
+            {error, {bad_data, {failed_to_read_token, s, DHLen}}}
+    end;
 read_token(HS, Token, Data) ->
     {K1, K2} = dh_token(HS, Token),
-    {mix_key(HS, dh(HS, K1, K2)), Data}.
+    {ok, mix_key(HS, dh(HS, K1, K2)), Data}.
 
 dh_token(#noise_hs{ e = E, re = RE }                  , ee) -> {E, RE};
 dh_token(#noise_hs{ e = E, rs = RS, role = initiator }, es) -> {E, RS};

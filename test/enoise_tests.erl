@@ -69,8 +69,6 @@ noise_interactive([#{ payload := PL0, ciphertext := CT0 } | Msgs], SendHS, RecvH
             ?assertEqual(HSHash, HSHash1), ?assertEqual(HSHash, HSHash2)
     end.
 
-
-
 noise_dh25519_test_() ->
     %% Test vectors from https://raw.githubusercontent.com/rweather/noise-c/master/tests/vector/noise-c-basic.txt
     {setup,
@@ -85,8 +83,8 @@ noise_monitor_test_() ->
     {setup,
         fun() -> setup_dh25519() end,
         fun(_X) -> ok end,
-        fun({[T|Tests] = _Tests, SKP, CKP}) ->
-                [ {T, fun() -> noise_monitor_test(T, SKP, CKP) end} ]
+        fun({Tests, SKP, CKP}) ->
+                [ {T, fun() -> noise_monitor_test(T, SKP, CKP) end} || T <- Tests ]
         end
     }.
 
@@ -104,7 +102,7 @@ setup_dh25519() ->
 noise_test(Conf, SKP, CKP) ->
     #{econn := EConn, echo_srv := EchoSrv} = noise_test_run(Conf, SKP, CKP),
     enoise:close(EConn),
-    echo_srv_stop(EchoSrv),
+    enoise_utils:echo_srv_stop(EchoSrv),
     ok.
 
 noise_test_run(Conf, SKP, CKP) ->
@@ -151,11 +149,12 @@ noise_test_run_(Conf, SKP, CKP) ->
     Protocol = enoise_protocol:from_name(Conf),
     Port     = 4556,
 
-    EchoSrv = echo_srv_start(Port, Protocol, SKP, CKP),
+    SrvOpts = [{echos, 2}, {cpub, CKP}],
+    EchoSrv = enoise_utils:echo_srv_start(Port, Protocol, SKP, SrvOpts),
 
     {ok, TcpSock} = gen_tcp:connect("localhost", Port, [{active, once}, binary, {reuseaddr, true}], 100),
 
-    Opts = [{noise, Protocol}, {s, CKP}] ++ [{rs, SKP} || need_rs(initiator, Conf) ],
+    Opts = [{noise, Protocol}, {s, CKP}] ++ [{rs, SKP} || enoise_utils:need_rs(initiator, Conf) ],
     {ok, EConn, _} = enoise:connect(TcpSock, Opts),
 
     ok = enoise:send(EConn, <<"Hello World!">>),
@@ -176,7 +175,7 @@ noise_test_run_(Conf, SKP, CKP) ->
 noise_monitor_test(Conf, SKP, CKP) ->
     #{ econn := {enoise, EConnPid}
      , proxy := Proxy
-     , tcp_sock := TcpSock } = noise_test_run(Conf, SKP, CKP),
+     , tcp_sock := _TcpSock } = noise_test_run(Conf, SKP, CKP),
     try proxy_exec(Proxy, fun() -> exit(normal) end)
     catch
         error:normal ->
@@ -184,42 +183,6 @@ noise_monitor_test(Conf, SKP, CKP) ->
                             false = is_process_alive(EConnPid)
                     end
     end.
-
-echo_srv_start(Port, Protocol, SKP, CPub) ->
-    Pid = spawn(fun() -> echo_srv(Port, Protocol, SKP, CPub) end),
-    timer:sleep(10),
-    Pid.
-
-echo_srv(Port, Protocol, SKP, CPub) ->
-    TcpOpts  = [{active, true}, binary, {reuseaddr, true}],
-
-    {ok, LSock} = gen_tcp:listen(Port, TcpOpts),
-    {ok, TcpSock} = gen_tcp:accept(LSock, 500),
-
-    Opts = [{noise, Protocol}, {s, SKP}] ++  [{rs, CPub} || need_rs(responder, Protocol)],
-    {ok, EConn, _} = enoise:accept(TcpSock, Opts),
-
-    gen_tcp:close(LSock),
-
-    %% {ok, Msg} = enoise:recv(EConn, 0, 100),
-    Msg0 = receive {noise, EConn, Data0} -> Data0
-           after 200 -> error(timeout) end,
-    ok = enoise:send(EConn, Msg0),
-
-    %% {ok, Msg} = enoise:recv(EConn, 0, 100),
-    Msg1 = receive {noise, EConn, Data1} -> Data1
-          after 200 -> error(timeout) end,
-    ok = enoise:send(EConn, Msg1),
-
-    ok.
-
-echo_srv_stop(Pid) ->
-    erlang:exit(Pid, kill).
-
-need_rs(Role, Conf) when is_binary(Conf) -> need_rs(Role, enoise_protocol:from_name(Conf));
-need_rs(Role, Protocol) ->
-    PreMsgs = enoise_protocol:pre_msgs(Role, Protocol),
-    lists:member({in, [s]}, PreMsgs).
 
 %% Talks to local echo-server (noise-c)
 %% client_test() ->
