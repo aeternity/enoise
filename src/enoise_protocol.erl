@@ -90,6 +90,7 @@ pre_msgs(Role, #noise_protocol{ hs_pattern = Pattern }) ->
     {PreMsgs, _Msgs} = protocol(Pattern),
     role_adapt(Role, PreMsgs).
 
+-spec role_adapt(Role :: enoise_hs_state:noise_role(), [noise_msg()]) -> [noise_msg()].
 role_adapt(initiator, Msgs) ->
     Msgs;
 role_adapt(responder, Msgs) ->

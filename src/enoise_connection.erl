@@ -53,15 +53,19 @@ start_link(TcpSock, Rx, Tx, Owner, {Active0, Buf}) ->
             Err
     end.
 
+-spec send(Noise :: pid(), Data :: binary()) -> ok | {error, term()}.
 send(Noise, Data) ->
     gen_server:call(Noise, {send, Data}).
 
+-spec set_active(Noise :: pid(), Active :: boolean()) -> ok | {error, term()}.
 set_active(Noise, Active) ->
     gen_server:call(Noise, {active, self(), Active}).
 
+-spec close(Noise :: pid()) -> ok | {error, term()}.
 close(Noise) ->
     gen_server:call(Noise, close).
 
+-spec controlling_process(Noise :: pid(), NewPid :: pid()) -> ok | {error, term()}.
 controlling_process(Noise, NewPid) ->
     gen_server:call(Noise, {controlling_process, self(), NewPid}, 100).
 

@@ -21,6 +21,11 @@
 -type noise_dh()    :: dh25519 | dh448.
 -type noise_token() :: s | e | ee | ss | es | se.
 -type keypair()     :: enoise_keypair:keypair().
+-type noise_split_state() :: #{ rx := enoise_cipher_state:state(),
+                                tx := enoise_cipher_state:state(),
+                                hs_hash := binary(),
+                                final_state => state() }.
+
 
 -record(noise_hs, { ss                :: enoise_sym_state:state()
                   , s                 :: keypair() | undefined
@@ -32,7 +37,7 @@
                   , msgs = []         :: [enoise_protocol:noise_msg()] }).
 
 -opaque state() :: #noise_hs{}.
--export_type([noise_dh/0, noise_role/0, noise_token/0, state/0]).
+-export_type([noise_dh/0, noise_role/0, noise_split_state/0, noise_token/0, state/0]).
 
 -spec init(Protocol :: string() | enoise_protocol:protocol(),
            Role :: noise_role(), Prologue :: binary(),
@@ -54,7 +59,7 @@ init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
                    ({in, [e]}, HS0)  -> mix_hash(HS0, enoise_keypair:pubkey(RE))
                 end, HS, PreMsgs).
 
--spec finalize(HS :: state()) -> {ok, map()} | {error, term()}.
+-spec finalize(HS :: state()) -> {ok, noise_split_state()} | {error, term()}.
 finalize(HS = #noise_hs{ msgs = [], ss = SS, role = Role }) ->
     {C1, C2} = enoise_sym_state:split(SS),
     HSHash   = enoise_sym_state:h(SS),
@@ -68,7 +73,7 @@ finalize(_) ->
 
 -spec next_message(HS :: state()) -> in | out | done.
 next_message(#noise_hs{ msgs = [{Dir, _} | _] }) -> Dir;
-next_message(_) -> done.
+next_message(#noise_hs{ }) -> done.
 
 -spec write_message(HS :: state(), PayLoad :: binary()) -> {ok, state(), binary()}.
 write_message(HS = #noise_hs{ msgs = [{out, Msg} | Msgs] }, PayLoad) ->

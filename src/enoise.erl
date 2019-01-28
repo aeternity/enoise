@@ -64,11 +64,9 @@ binary().
                               send_msg := send_msg_fun(),
                               state    := term() }.
 %% Noise communication state - used to parameterize a handshake. Consists of a
-%% send function one receive function and an internal state.
+%% send function, one receive function, and an internal state.
 
--type noise_split_state() :: #{ rx := enoise_cipher_state:state(),
-                                tx := enoise_cipher_state:state(),
-                                hs_hash := binary() }.
+-type noise_split_state() :: enoise_hs_state:noise_split_state().
 %% Return value from the final `split' operation. Provides a CipherState for
 %% receiving and a CipherState transmission. Also includes the final handshake
 %% hash for channel binding.
@@ -140,7 +138,7 @@ connect(TcpSock, Options) ->
 %% @end
 -spec accept(TcpSock :: gen_tcp:socket(),
              Options :: noise_options()) ->
-                    {ok, noise_socket()} | {error, term()}.
+                    {ok, noise_socket(), enoise_hs_state:state()} | {error, term()}.
 accept(TcpSock, Options) ->
     tcp_handshake(TcpSock, responder, Options).
 

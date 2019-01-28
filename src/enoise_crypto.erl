@@ -55,7 +55,7 @@ hkdf(Hash, Key, Data) ->
     [Output1, Output2, Output3].
 
 -spec rekey(Cipher :: enoise_cipher_state:noise_cipher(),
-            Key :: binary()) -> binary().
+            Key :: binary()) -> binary() | {error, term()}.
 rekey(Cipher, K) ->
     encrypt(Cipher, K, ?MAX_NONCE, <<>>, <<0:(32*8)>>).
 
@@ -80,7 +80,10 @@ decrypt('AESGCM', K, N, Ad, CipherText0) ->
     CTLen = byte_size(CipherText0) - ?MAC_LEN,
     <<CipherText:CTLen/binary, MAC:?MAC_LEN/binary>> = CipherText0,
     Nonce = <<0:32, N:64>>,
-    crypto:block_decrypt(aes_gcm, K, Nonce, {Ad, CipherText, MAC}).
+    case crypto:block_decrypt(aes_gcm, K, Nonce, {Ad, CipherText, MAC}) of
+        error -> {error, decrypt_failed};
+        Data  -> Data
+    end.
 
 
 -spec hash(Hash :: enoise_sym_state:noise_hash(), Data :: binary()) -> binary().

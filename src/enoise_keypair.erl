@@ -36,7 +36,9 @@ new(Type) ->
 %% @doc Create a new keypair of type `Type'. If `Public' is `undefined'
 %% it will be computed from the `Secret' (using the curve/algorithm
 %% indicated by `Type').
--spec new(Type :: key_type(), Secret :: binary(), Public :: binary() | undefined) -> keypair().
+-spec new(Type :: key_type(),
+          Secret :: binary() | undefined,
+          Public :: binary() | undefined) -> keypair().
 new(Type, Secret, undefined) ->
     new(Type, Secret, pubkey_from_secret(Type, Secret));
 new(Type, Secret, Public) ->

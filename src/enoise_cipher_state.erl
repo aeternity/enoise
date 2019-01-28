@@ -50,11 +50,16 @@ set_nonce(CState = #noise_cs{}, Nonce) ->
     CState#noise_cs{ n = Nonce }.
 
 -spec encrypt_with_ad(CState :: state(), AD :: binary(), PlainText :: binary()) ->
-                {ok, state(), binary()}.
+                {ok, state(), binary()} | {error, term()}.
 encrypt_with_ad(CState = #noise_cs{ k = empty }, _AD, PlainText) ->
     {ok, CState, PlainText};
 encrypt_with_ad(CState = #noise_cs{ k = K, n = N, cipher = Cipher }, AD, PlainText) ->
-    {ok, CState#noise_cs{ n = N+1 }, enoise_crypto:encrypt(Cipher, K, N, AD, PlainText)}.
+    case enoise_crypto:encrypt(Cipher, K, N, AD, PlainText) of
+        Encrypted when is_binary(Encrypted) ->
+            {ok, CState#noise_cs{ n = N+1 }, Encrypted};
+        Err = {error, _} ->
+            Err
+    end.
 
 -spec decrypt_with_ad(CState :: state(), AD :: binary(), CipherText :: binary()) ->
                 {ok, state(), binary()} | {error, term()}.
