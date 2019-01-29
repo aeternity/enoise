@@ -90,6 +90,7 @@ read_message(HS = #noise_hs{ msgs = [{in, Msg} | Msgs] }, Message) ->
         Err = {error, _} -> Err
     end.
 
+-spec remote_keys(HS :: state()) -> keypair().
 remote_keys(#noise_hs{ rs = RS }) ->
     RS.
 

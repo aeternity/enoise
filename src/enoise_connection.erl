@@ -57,7 +57,7 @@ start_link(TcpSock, Rx, Tx, Owner, {Active0, Buf}) ->
 send(Noise, Data) ->
     gen_server:call(Noise, {send, Data}).
 
--spec set_active(Noise :: pid(), Active :: boolean()) -> ok | {error, term()}.
+-spec set_active(Noise :: pid(), Active :: true | once) -> ok | {error, term()}.
 set_active(Noise, Active) ->
     gen_server:call(Noise, {active, self(), Active}).
 
