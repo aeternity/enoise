@@ -114,9 +114,10 @@ parse_test_vectors(File) ->
 
 %% Only test supported configurations
 noise_test_filter(Tests0) ->
-    Tests1 = [ T || T = #{ name := Name } <- Tests0, supported(Name) ],
+    Tests1 = [ T || T = #{ protocol_name := Name } <- Tests0, supported(Name) ],
     case length(Tests1) < length(Tests0) of
-        true  -> ?debugFmt("WARNING: ~p test vectors are unsupported", [length(Tests0) - length(Tests1)]);
+        true  -> ?debugFmt("WARNING: ~p test vectors out of ~p are unsupported",
+                           [length(Tests0) - length(Tests1), length(Tests0)]);
         false -> ok
     end,
     Tests1.

@@ -12,12 +12,12 @@ noise_interactive_test_() ->
         fun() -> test_utils:noise_test_vectors() end,
         fun(_X) -> ok end,
         fun(Tests) ->
-            [ {maps:get(name, T), fun() -> noise_interactive(T) end}
+            [ {maps:get(protocol_name, T), fun() -> noise_interactive(T) end}
               || T <- test_utils:noise_test_filter(Tests) ]
         end
     }.
 
-noise_interactive(V = #{ name := Name }) ->
+noise_interactive(V = #{ protocol_name := Name }) ->
     Protocol = enoise_protocol:from_name(Name),
 
     FixK = fun(undefined) -> undefined;
