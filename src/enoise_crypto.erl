@@ -64,7 +64,8 @@ rekey(Cipher, K) ->
               Ad :: binary(), PlainText :: binary()) ->
                 binary() | {error, term()}.
 encrypt('ChaChaPoly', K, N, Ad, PlainText) ->
-    enacl:aead_chacha20poly1305_encrypt(K, N, Ad, PlainText);
+    Nonce = <<0:32, N:64/little-unsigned-integer>>,
+    enacl:aead_chacha20poly1305_ietf_encrypt(PlainText, Ad, Nonce, K);
 encrypt('AESGCM', K, N, Ad, PlainText) ->
     Nonce = <<0:32, N:64>>,
     {CipherText, CipherTag} = crypto:block_encrypt(aes_gcm, K, Nonce, {Ad, PlainText}),
@@ -75,7 +76,8 @@ encrypt('AESGCM', K, N, Ad, PlainText) ->
               AD :: binary(), CipherText :: binary()) ->
                 binary() | {error, term()}.
 decrypt('ChaChaPoly', K, N, Ad, CipherText) ->
-    enacl:aead_chacha20poly1305_decrypt(K, N, Ad, CipherText);
+    Nonce = <<0:32, N:64/little-unsigned-integer>>,
+    enacl:aead_chacha20poly1305_ietf_decrypt(CipherText, Ad, Nonce, K);
 decrypt('AESGCM', K, N, Ad, CipherText0) ->
     CTLen = byte_size(CipherText0) - ?MAC_LEN,
     <<CipherText:CTLen/binary, MAC:?MAC_LEN/binary>> = CipherText0,
@@ -88,7 +90,7 @@ decrypt('AESGCM', K, N, Ad, CipherText0) ->
 
 -spec hash(Hash :: enoise_sym_state:noise_hash(), Data :: binary()) -> binary().
 hash(blake2b, Data) ->
-    {ok, Hash} = enacl:generichash(64, Data), Hash;
+    Hash = enacl:generichash(64, Data), Hash;
 hash(sha256, Data) ->
     crypto:hash(sha256, Data);
 hash(sha512, Data) ->
