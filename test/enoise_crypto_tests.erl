@@ -44,6 +44,13 @@ chachapoly_test() ->
         enoise_crypto:decrypt('ChaChaPoly', Key, Nonce, AD, <<CipherText/binary, MAC/binary>>),
 
     ?assertMatch(PlainText, PlainText0),
+
+    Key1 = enoise_crypto:rekey('ChaChaPoly', Key),
+    <<CipherText1:CTLen/binary, MAC1:MACLen/binary>> =
+        enoise_crypto:encrypt('ChaChaPoly', Key1, Nonce, AD, PlainText),
+    <<PlainText1:PTLen/binary>> =
+        enoise_crypto:decrypt('ChaChaPoly', Key1, Nonce, AD, <<CipherText1/binary, MAC1/binary>>),
+    ?assertMatch(PlainText, PlainText1),
     ok.
 
 blake2b_test() ->
