@@ -9,12 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 ### Removed
 
-## [4.3.1] - 2020-04-21
+## [1.2.0] - 2021-10-28
 ### Added
 ### Changed
-- Fixed included compiler binary file, which was broken due to incorrect local system dependencies.
-  Because the aesophia version hasn't changed, the compiler in this release
-  continues to report as `v4.3.0`.
+- Use the new AEAD crypto interface introduced in OTP 22. This makes `enoise` OPT 24 compatible
+  but it also means it no longer works on OTP 21 and earlier. You can't win them all.
+- Fixed ChaChaPoly20 rekey
 ### Removed
 
 ## [1.1.0] - 2020-09-24
@@ -41,7 +41,8 @@ Initial version the following map describe what is supported:
  , dh         => [dh25519] }
 ```
 
-[Unreleased]: https://github.com/aeternity/aesophia_cli/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/aeternity/aesophia_cli/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/aeternity/aesophia_cli/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/aeternity/aesophia_cli/compare/v1.0.1...v1.1.0
 [1.0.1]: https://github.com/aeternity/aesophia_cli/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/aeternity/enoise/releases/tag/v1.0.0

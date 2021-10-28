@@ -1,6 +1,6 @@
 {application, enoise,
  [{description, "An Erlang implementation of the Noise protocol"},
-  {vsn, "1.1.0"},
+  {vsn, "1.2.0"},
   {registered, []},
   {applications,
    [kernel,
