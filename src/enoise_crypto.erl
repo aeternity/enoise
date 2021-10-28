@@ -56,6 +56,10 @@ hkdf(Hash, Key, Data) ->
 
 -spec rekey(Cipher :: enoise_cipher_state:noise_cipher(),
             Key :: binary()) -> binary() | {error, term()}.
+rekey('ChaChaPoly', K0) ->
+    KLen = enacl:aead_chacha20poly1305_ietf_KEYBYTES(),
+    <<K:KLen/binary, _/binary>> = encrypt('ChaChaPoly', K0, ?MAX_NONCE, <<>>, <<0:(32*8)>>),
+    K;
 rekey(Cipher, K) ->
     encrypt(Cipher, K, ?MAX_NONCE, <<>>, <<0:(32*8)>>).
 

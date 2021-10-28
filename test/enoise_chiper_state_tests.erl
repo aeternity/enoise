@@ -26,5 +26,14 @@ chachapoly_test() ->
         enoise_cipher_state:decrypt_with_ad(CS1, AD, <<CipherText/binary, MAC/binary>>),
 
     ?assertMatch(PlainText, PlainText0),
+
+    % rekey test
+    CS4 = enoise_cipher_state:rekey(CS1),
+    {ok, _CS5, <<CipherText1:CTLen/binary, MAC1:MACLen/binary>>} =
+        enoise_cipher_state:encrypt_with_ad(CS4, AD, PlainText),
+    {ok, _CS6, <<PlainText1:PTLen/binary>>} =
+        enoise_cipher_state:decrypt_with_ad(CS4, AD, <<CipherText1/binary, MAC1/binary>>),
+    ?assertMatch(PlainText, PlainText1),
+
     ok.
 
