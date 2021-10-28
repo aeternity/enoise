@@ -72,7 +72,7 @@ encrypt('ChaChaPoly', K, N, Ad, PlainText) ->
     enacl:aead_chacha20poly1305_ietf_encrypt(PlainText, Ad, Nonce, K);
 encrypt('AESGCM', K, N, Ad, PlainText) ->
     Nonce = <<0:32, N:64>>,
-    {CipherText, CipherTag} = crypto:block_encrypt(aes_gcm, K, Nonce, {Ad, PlainText}),
+    {CipherText, CipherTag} = crypto:crypto_one_time_aead(aes_256_gcm, K, Nonce, PlainText, Ad, true),
     <<CipherText/binary, CipherTag/binary>>.
 
 -spec decrypt(Cipher ::enoise_cipher_state:noise_cipher(),
@@ -86,7 +86,7 @@ decrypt('AESGCM', K, N, Ad, CipherText0) ->
     CTLen = byte_size(CipherText0) - ?MAC_LEN,
     <<CipherText:CTLen/binary, MAC:?MAC_LEN/binary>> = CipherText0,
     Nonce = <<0:32, N:64>>,
-    case crypto:block_decrypt(aes_gcm, K, Nonce, {Ad, CipherText, MAC}) of
+    case crypto:crypto_one_time_aead(aes_256_gcm, K, Nonce, CipherText, Ad, MAC, false) of
         error -> {error, decrypt_failed};
         Data  -> Data
     end.
