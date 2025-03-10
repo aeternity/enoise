@@ -29,12 +29,17 @@
 %% @doc Perform a Diffie-Hellman calculation with the secret key from `Key1'
 %% and the public key from `Key2' with algorithm `Algo'.
 -spec dh(Algo :: enoise_hs_state:noise_dh(),
-          Key1:: keypair(), Key2 :: keypair()) -> binary().
-dh(dh25519, Key1, Key2) ->
-    enacl:curve25519_scalarmult( enoise_keypair:seckey(Key1)
-                               , enoise_keypair:pubkey(Key2));
+         Key1:: keypair(), Key2 :: keypair()) -> binary().
+dh(Type, Key1, Key2) when Type == dh25519; Type == dh448 ->
+    dh_(eddh_type(Type), enoise_keypair:pubkey(Key2), enoise_keypair:seckey(Key1));
 dh(Type, _Key1, _Key2) ->
     error({unsupported_diffie_hellman, Type}).
+
+eddh_type(dh25519) -> x25519;
+eddh_type(dh448)   -> x448.
+
+dh_(DHType, OtherPub, MyPriv) ->
+    crypto:compute_key(eddh, OtherPub, MyPriv, DHType).
 
 -spec hmac(Hash :: enoise_sym_state:noise_hash(),
            Key :: binary(), Data :: binary()) -> binary().
