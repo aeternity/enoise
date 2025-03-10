@@ -137,7 +137,7 @@ supported_dh(Dh) ->
 -spec supported() -> map().
 supported() ->
     #{ hs_pattern => [nn, kn, nk, kk, nx, kx, xn, in, xk, ik, xx, ix]
-    ,  hash       => [blake2b, sha256, sha512]
+    ,  hash       => [blake2s, blake2b, sha256, sha512]
     ,  cipher     => ['ChaChaPoly', 'AESGCM']
     ,  dh         => [dh25519, dh448]
     }.

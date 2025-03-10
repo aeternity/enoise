@@ -98,8 +98,10 @@ decrypt('AESGCM', K, N, Ad, CipherText0) ->
 
 
 -spec hash(Hash :: enoise_sym_state:noise_hash(), Data :: binary()) -> binary().
+hash(blake2s, Data) ->
+    crypto:hash(blake2s, Data);
 hash(blake2b, Data) ->
-    Hash = enacl:generichash(64, Data), Hash;
+    crypto:hash(blake2b, Data);
 hash(sha256, Data) ->
     crypto:hash(sha256, Data);
 hash(sha512, Data) ->
