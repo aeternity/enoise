@@ -62,7 +62,7 @@ hkdf(Hash, Key, Data) ->
 -spec rekey(Cipher :: enoise_cipher_state:noise_cipher(),
             Key :: binary()) -> binary() | {error, term()}.
 rekey('ChaChaPoly', K0) ->
-    KLen = enacl:aead_chacha20poly1305_ietf_KEYBYTES(),
+    KLen = 32,
     <<K:KLen/binary, _/binary>> = encrypt('ChaChaPoly', K0, ?MAX_NONCE, <<>>, <<0:(32*8)>>),
     K;
 rekey(Cipher, K) ->
@@ -72,30 +72,27 @@ rekey(Cipher, K) ->
               Key :: binary(), Nonce :: non_neg_integer(),
               Ad :: binary(), PlainText :: binary()) ->
                 binary() | {error, term()}.
-encrypt('ChaChaPoly', K, N, Ad, PlainText) ->
-    Nonce = <<0:32, N:64/little-unsigned-integer>>,
-    enacl:aead_chacha20poly1305_ietf_encrypt(PlainText, Ad, Nonce, K);
-encrypt('AESGCM', K, N, Ad, PlainText) ->
-    Nonce = <<0:32, N:64>>,
-    {CipherText, CipherTag} = crypto:crypto_one_time_aead(aes_256_gcm, K, Nonce, PlainText, Ad, true),
-    <<CipherText/binary, CipherTag/binary>>.
+encrypt(Cipher, K, N, Ad, PlainText) ->
+    {CText, CTag} = crypto:crypto_one_time_aead(cipher(Cipher), K, nonce(Cipher, N), PlainText, Ad, true),
+    <<CText/binary, CTag/binary>>.
 
 -spec decrypt(Cipher ::enoise_cipher_state:noise_cipher(),
               Key :: binary(), Nonce :: non_neg_integer(),
               AD :: binary(), CipherText :: binary()) ->
                 binary() | {error, term()}.
-decrypt('ChaChaPoly', K, N, Ad, CipherText) ->
-    Nonce = <<0:32, N:64/little-unsigned-integer>>,
-    enacl:aead_chacha20poly1305_ietf_decrypt(CipherText, Ad, Nonce, K);
-decrypt('AESGCM', K, N, Ad, CipherText0) ->
+decrypt(Cipher, K, N, Ad, CipherText0) ->
     CTLen = byte_size(CipherText0) - ?MAC_LEN,
-    <<CipherText:CTLen/binary, MAC:?MAC_LEN/binary>> = CipherText0,
-    Nonce = <<0:32, N:64>>,
-    case crypto:crypto_one_time_aead(aes_256_gcm, K, Nonce, CipherText, Ad, MAC, false) of
+    <<CText:CTLen/binary, MAC:?MAC_LEN/binary>> = CipherText0,
+    case crypto:crypto_one_time_aead(cipher(Cipher), K, nonce(Cipher, N), CText, Ad, MAC, false) of
         error -> {error, decrypt_failed};
         Data  -> Data
     end.
 
+nonce('ChaChaPoly', N) -> <<0:32, N:64/little-unsigned-integer>>;
+nonce('AESGCM', N)     -> <<0:32, N:64/big-unsigned-integer>>.
+
+cipher('ChaChaPoly') -> chacha20_poly1305;
+cipher('AESGCM')     -> aes_256_gcm.
 
 -spec hash(Hash :: enoise_sym_state:noise_hash(), Data :: binary()) -> binary().
 hash(blake2s, Data) ->
