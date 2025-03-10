@@ -26,7 +26,7 @@ echo_srv(Port, Protocol, SKP, SrvOpts) ->
     AcceptRes =
         try
             enoise:accept(TcpSock, Opts)
-        catch _:R -> gen_tcp:close(TcpSock), {error, {R, erlang:get_stacktrace()}} end,
+        catch _:R:S -> gen_tcp:close(TcpSock), {error, {R, S}} end,
 
     gen_tcp:close(LSock),
 
