@@ -43,7 +43,8 @@ noise_test(_Name, Protocol, Init, Resp, Messages, HSHash) ->
     SecK = fun(undefined) -> undefined; (Sec) -> enoise_keypair:new(DH, Sec, undefined) end,
     PubK = fun(undefined) -> undefined; (Pub) -> enoise_keypair:new(DH, Pub) end,
     HSInit = fun(P, R, #{ e := E, s := S, rs := RS, prologue := PL }) ->
-                enoise_hs_state:init(P, R, PL, {SecK(S), SecK(E), PubK(RS), undefined})
+                 {ok, HS} = enoise_hs_state:init(P, R, PL, {SecK(S), SecK(E), PubK(RS), undefined}),
+                 HS
              end,
 
     InitHS = HSInit(Protocol, initiator, Init),

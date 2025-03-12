@@ -70,13 +70,13 @@ seckey(#kp{ sec = S }) ->
 
 %% -- Local functions --------------------------------------------------------
 new_key_pair(Type) when Type == dh25519; Type == dh448 ->
-    crypto:generate_key(eddh, eddh_type(Type));
+    crypto:generate_key(ecdh, ecdh_type(Type));
 new_key_pair(Type) ->
     error({unsupported_key_type, Type}).
 
 pubkey_from_secret(Type, Secret) when Type == dh25519; Type == dh448 ->
-    {Public, Secret} = crypto:generate_key(eddh, eddh_type(Type), Secret),
+    {Public, Secret} = crypto:generate_key(ecdh, ecdh_type(Type), Secret),
     Public.
 
-eddh_type(dh25519) -> x25519;
-eddh_type(dh448)   -> x448.
+ecdh_type(dh25519) -> x25519;
+ecdh_type(dh448)   -> x448.

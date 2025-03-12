@@ -41,10 +41,9 @@ noise_interactive(V = #{ protocol_name := Name }) ->
 noise_interactive(_Name, Protocol, Init, Resp, Messages, HSHash) ->
     DH = enoise_protocol:dh(Protocol),
     SecK = fun(undefined) -> undefined; (Sec) -> enoise_keypair:new(DH, Sec, undefined) end,
-    PubK = fun(undefined) -> undefined; (Pub) -> enoise_keypair:new(DH, Pub) end,
 
     HSInit = fun(#{ e := E, s := S, rs := RS, prologue := PL }, R) ->
-                Opts = [{noise, Protocol}, {s, SecK(S)}, {e, SecK(E)}, {rs, PubK(RS)}, {prologue, PL}],
+                Opts = [{noise, Protocol}, {s, SecK(S)}, {e, SecK(E)}, {rs, RS}, {prologue, PL}],
                 enoise:handshake(Opts, R)
              end,
     {ok, InitHS} = HSInit(Init, initiator),
@@ -149,12 +148,12 @@ noise_test_run_(Conf, SKP, CKP) ->
     Protocol = enoise_protocol:from_name(Conf),
     Port     = 4556,
 
-    SrvOpts = [{echos, 2}, {cpub, CKP}],
+    SrvOpts = [{echos, 2}, {cpub, enoise_keypair:pubkey(CKP)}],
     EchoSrv = enoise_utils:echo_srv_start(Port, Protocol, SKP, SrvOpts),
 
     {ok, TcpSock} = gen_tcp:connect("localhost", Port, [{active, once}, binary, {reuseaddr, true}], 100),
 
-    Opts = [{noise, Protocol}, {s, CKP}] ++ [{rs, SKP} || enoise_utils:need_rs(initiator, Conf) ],
+    Opts = [{noise, Protocol}, {s, CKP}] ++ [{rs, enoise_keypair:pubkey(SKP)} || enoise_utils:need_rs(initiator, Conf) ],
     {ok, EConn, _} = enoise:connect(TcpSock, Opts),
 
     ok = enoise:send(EConn, <<"Hello World!">>),

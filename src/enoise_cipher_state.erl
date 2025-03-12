@@ -74,6 +74,8 @@ decrypt_with_ad(CState = #noise_cs{ k = K, n = N, cipher = Cipher }, AD, CipherT
     end.
 
 -spec rekey(CState :: state()) -> state().
+rekey(CState = #noise_cs{ k = empty }) ->
+    CState;
 rekey(CState = #noise_cs{ k = K, cipher = Cipher }) ->
     CState#noise_cs{ k = enoise_crypto:rekey(Cipher, K) }.
 

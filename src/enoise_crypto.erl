@@ -31,15 +31,15 @@
 -spec dh(Algo :: enoise_hs_state:noise_dh(),
          Key1:: keypair(), Key2 :: keypair()) -> binary().
 dh(Type, Key1, Key2) when Type == dh25519; Type == dh448 ->
-    dh_(eddh_type(Type), enoise_keypair:pubkey(Key2), enoise_keypair:seckey(Key1));
+    dh_(ecdh_type(Type), enoise_keypair:pubkey(Key2), enoise_keypair:seckey(Key1));
 dh(Type, _Key1, _Key2) ->
     error({unsupported_diffie_hellman, Type}).
 
-eddh_type(dh25519) -> x25519;
-eddh_type(dh448)   -> x448.
+ecdh_type(dh25519) -> x25519;
+ecdh_type(dh448)   -> x448.
 
 dh_(DHType, OtherPub, MyPriv) ->
-    crypto:compute_key(eddh, OtherPub, MyPriv, DHType).
+    crypto:compute_key(ecdh, OtherPub, MyPriv, DHType).
 
 -spec hmac(Hash :: enoise_sym_state:noise_hash(),
            Key :: binary(), Data :: binary()) -> binary().
@@ -59,8 +59,7 @@ hkdf(Hash, Key, Data) ->
     Output3 = hmac(Hash, TempKey, <<Output2/binary, 3:8>>),
     [Output1, Output2, Output3].
 
--spec rekey(Cipher :: enoise_cipher_state:noise_cipher(),
-            Key :: binary()) -> binary() | {error, term()}.
+-spec rekey(Cipher :: enoise_cipher_state:noise_cipher(), Key :: binary()) -> binary().
 rekey('ChaChaPoly', K0) ->
     KLen = 32,
     <<K:KLen/binary, _/binary>> = encrypt('ChaChaPoly', K0, ?MAX_NONCE, <<>>, <<0:(32*8)>>),
@@ -68,18 +67,15 @@ rekey('ChaChaPoly', K0) ->
 rekey(Cipher, K) ->
     encrypt(Cipher, K, ?MAX_NONCE, <<>>, <<0:(32*8)>>).
 
--spec encrypt(Cipher :: enoise_cipher_state:noise_cipher(),
-              Key :: binary(), Nonce :: non_neg_integer(),
-              Ad :: binary(), PlainText :: binary()) ->
-                binary() | {error, term()}.
+-spec encrypt(Cipher :: enoise_cipher_state:noise_cipher(), Key :: binary(),
+              Nonce :: non_neg_integer(), Ad :: binary(), PlainText :: binary()) -> binary().
 encrypt(Cipher, K, N, Ad, PlainText) ->
     {CText, CTag} = crypto:crypto_one_time_aead(cipher(Cipher), K, nonce(Cipher, N), PlainText, Ad, true),
     <<CText/binary, CTag/binary>>.
 
--spec decrypt(Cipher ::enoise_cipher_state:noise_cipher(),
-              Key :: binary(), Nonce :: non_neg_integer(),
-              AD :: binary(), CipherText :: binary()) ->
-                binary() | {error, term()}.
+-spec decrypt(Cipher ::enoise_cipher_state:noise_cipher(), Key :: binary(),
+              Nonce :: non_neg_integer(), AD :: binary(),
+              CipherText :: binary()) -> binary() | {error, term()}.
 decrypt(Cipher, K, N, Ad, CipherText0) ->
     CTLen = byte_size(CipherText0) - ?MAC_LEN,
     <<CText:CTLen/binary, MAC:?MAC_LEN/binary>> = CipherText0,

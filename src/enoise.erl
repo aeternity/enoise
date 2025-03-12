@@ -270,14 +270,15 @@ create_hstate(Options, Role) ->
                 enoise_protocol:from_name(X);
             _ -> NoiseProtocol0
         end,
-
+    DH = enoise_protocol:dh(NoiseProtocol),
     S  = proplists:get_value(s, Options, undefined),
     E  = proplists:get_value(e, Options, undefined),
-    RS = proplists:get_value(rs, Options, undefined),
-    RE = proplists:get_value(re, Options, undefined),
+    RS = remote_keypair(DH, proplists:get_value(rs, Options, undefined)),
+    RE = remote_keypair(DH, proplists:get_value(re, Options, undefined)),
 
     enoise_hs_state:init(NoiseProtocol, Role,
                          Prologue, {S, E, RS, RE}).
+
 
 check_gen_tcp(TcpSock) ->
     case inet:getopts(TcpSock, [mode, packet, active, header, packet_size]) of
@@ -321,3 +322,6 @@ gen_tcp_rcv_msg({TcpSock, Active, Buf}, Timeout) ->
         {error, timeout}
     end.
 
+remote_keypair(_DH, undefined) -> undefined;
+remote_keypair(DH, RemotePub) when is_binary(RemotePub) -> enoise_keypair:new(DH, RemotePub);
+remote_keypair(_DH, KeyPair) -> KeyPair.
