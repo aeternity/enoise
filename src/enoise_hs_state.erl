@@ -42,7 +42,7 @@
 -export_type([noise_dh/0, noise_role/0, noise_split_state/0, noise_token/0, state/0]).
 
 -spec init(Protocol :: enoise_protocol:protocol(), Role :: noise_role(),
-           Prologue :: binary(), Keys :: initial_keys()) -> state().
+           Prologue :: binary(), Keys :: initial_keys()) -> {ok, state()} | {error, term()}.
 init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
     SS0 = enoise_sym_state:init(Protocol),
     SS1 = enoise_sym_state:mix_hash(SS0, Prologue),
@@ -54,7 +54,7 @@ init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
     PreMsgs = enoise_protocol:pre_msgs(Role, Protocol),
     pre_mix(PreMsgs, HS).
 
-pre_mix([], HS) -> HS;
+pre_mix([], HS) -> {ok, HS};
 pre_mix([{out, [s]} | Msgs], HS = #noise_hs{ s = S }) when S /= undefined ->
     pre_mix(Msgs, mix_hash(HS, enoise_keypair:pubkey(S)));
 pre_mix([{out, [e]} | Msgs], HS = #noise_hs{ e = E }) when E /= undefined ->
@@ -62,9 +62,9 @@ pre_mix([{out, [e]} | Msgs], HS = #noise_hs{ e = E }) when E /= undefined ->
 pre_mix([{in, [s]} | Msgs], HS = #noise_hs{ rs = RS }) when RS /= undefined ->
     pre_mix(Msgs, mix_hash(HS, enoise_keypair:pubkey(RS)));
 pre_mix([{in, [e]} | Msgs], HS = #noise_hs{ re = RE }) when RE /= undefined ->
-    pre_mix(Msgs, mix_hash(HS, enoise_keypair:pubkey(RE))).
-%% pre_mix(_Msg, _HS) ->
-%%     {error, invalid_noise_setup}.
+    pre_mix(Msgs, mix_hash(HS, enoise_keypair:pubkey(RE)));
+pre_mix(_Msg, _HS) ->
+    {error, invalid_noise_setup}.
 
 -spec finalize(HS :: state()) -> {ok, noise_split_state()} | {error, term()}.
 finalize(HS = #noise_hs{ msgs = [], ss = SS, role = Role }) ->
@@ -97,8 +97,8 @@ read_message(HS = #noise_hs{ msgs = [{in, Msg} | Msgs] }, Message) ->
         Err = {error, _} -> Err
     end.
 
--spec remote_keys(HS :: state()) -> keypair().
-remote_keys(#noise_hs{ rs = RS }) when is_tuple(RS) ->
+-spec remote_keys(HS :: state()) -> undefined | keypair().
+remote_keys(#noise_hs{ rs = RS }) ->
     RS.
 
 write_message(HS, [], MsgBuf) ->
