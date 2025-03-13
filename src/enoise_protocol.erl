@@ -19,7 +19,7 @@
         , to_name/1]).
 
 -ifdef(TEST).
--export([to_name/4, from_name_pattern/1, to_name_pattern/1]).
+-compile([export_all, nowarn_export_all]).
 -endif.
 
 -type noise_pattern() :: nn | kn | nk | kk | nx | kx | xn | in | xk | ik | xx | ix.

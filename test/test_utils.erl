@@ -115,13 +115,33 @@ parse_test_vectors(File) ->
 %% Only test supported configurations
 noise_test_filter(Tests0) ->
     Tests1 = [ T || T = #{ protocol_name := Name } <- Tests0, supported(Name) ],
-    case length(Tests1) < length(Tests0) of
-        true  -> ?debugFmt("WARNING: ~p test vectors out of ~p are unsupported",
-                           [length(Tests0) - length(Tests1), length(Tests0)]);
-        false -> ok
+    Unsupported = Tests0 -- Tests1,
+    case Unsupported of
+        [] -> ok;
+        _  ->
+            ?debugFmt("WARNING: ~p test vectors out of ~p are unsupported",
+                      [length(Unsupported), length(Tests0)]),
+            analyse_unsupported([Name || #{ protocol_name := Name } <- Unsupported])
     end,
     Tests1.
 
 supported(Name) ->
     try enoise_protocol:from_name(Name), true
     catch _:_ -> false end.
+
+analyse_unsupported(Us) ->
+    UParts = lists:map(fun dismount_protocol/1, Us),
+    UPats  = lists:usort([ Pat  || {Pat, _, _, _}  <- UParts, not enoise_protocol:supported_pattern(Pat) ]),
+    UDhs   = lists:usort([ Dh   || {_, Dh, _, _}   <- UParts, not enoise_protocol:supported_dh(Dh) ]),
+    UCiphs = lists:usort([ Ciph || {_, _, Ciph, _} <- UParts, not enoise_protocol:supported_cipher(Ciph) ]),
+    UHashs = lists:usort([ Hash || {_, _, _, Hash} <- UParts, not enoise_protocol:supported_hash(Hash) ]),
+    ?debugFmt("Unsupported: ~p", [{UPats, UDhs, UCiphs, UHashs}]).
+
+dismount_protocol(P) ->
+    case string:lexemes(binary_to_list(P), "_") of
+        ["Noise", PatStr, DhStr, CiphStr, HashStr] ->
+            {enoise_protocol:from_name_pattern(PatStr),
+             enoise_protocol:from_name_dh(DhStr),
+             enoise_protocol:from_name_cipher(CiphStr),
+             enoise_protocol:from_name_hash(HashStr)}
+    end.
