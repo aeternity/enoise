@@ -74,10 +74,10 @@ from_name(String) ->
                 supported_cipher(Cipher) andalso supported_hash(Hash) of
                 true  -> #noise_protocol{ hs_pattern = Pattern, dh = Dh
                                         , cipher = Cipher, hash = Hash };
-                false -> error({name_not_recognized, String})
+                false -> error({unsupported_protocol, String})
             end;
         _ ->
-            error({name_not_recognized, String})
+            error({unsupported_protocol, String})
     end.
 
 -spec msgs(Role :: enoise_hs_state:noise_role(), Protocol :: protocol()) -> [noise_msg()].
