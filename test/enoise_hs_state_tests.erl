@@ -50,11 +50,13 @@ noise_test(_Name, Protocol, Init, Resp, Messages, HSHash) ->
     InitHS = HSInit(Protocol, initiator, Init),
     RespHS = HSInit(Protocol, responder, Resp),
 
-    noise_test(Messages, InitHS, RespHS, HSHash),
+    noise_test(oneway(Protocol), Messages, InitHS, RespHS, HSHash),
 
     ok.
 
-noise_test([M = #{ payload := PL0, ciphertext := CT0 } | Msgs], SendHS, RecvHS, HSHash) ->
+oneway(P) -> lists:member(enoise_protocol:pattern(P), [n, k, x]).
+
+noise_test(Oneway, [M = #{ payload := PL0, ciphertext := CT0 } | Msgs], SendHS, RecvHS, HSHash) ->
     PL = test_utils:hex_str_to_bin("0x" ++ binary_to_list(PL0)),
     CT = test_utils:hex_str_to_bin("0x" ++ binary_to_list(CT0)),
     case {enoise_hs_state:next_message(SendHS), enoise_hs_state:next_message(RecvHS)} of
@@ -63,23 +65,31 @@ noise_test([M = #{ payload := PL0, ciphertext := CT0 } | Msgs], SendHS, RecvHS, 
             ?assertEqual(CT, Message),
             {ok, RecvHS1, PL1} = enoise_hs_state:read_message(RecvHS, Message),
             ?assertEqual(PL, PL1),
-            noise_test(Msgs, RecvHS1, SendHS1, HSHash);
+            noise_test(Oneway, Msgs, RecvHS1, SendHS1, HSHash);
         {done, done} ->
             {ok, #{ rx := RX1, tx := TX1, hs_hash := HSHash1 }} = enoise_hs_state:finalize(SendHS),
             {ok, #{ rx := RX2, tx := TX2, hs_hash := HSHash2 }} = enoise_hs_state:finalize(RecvHS),
             ?assertEqual(RX1, TX2), ?assertEqual(RX2, TX1),
             ?assertEqual(HSHash, HSHash1), ?assertEqual(HSHash, HSHash2),
-            noise_test([M | Msgs], TX1, RX1);
+            %% Only one party will send/encrypt in One-way scenario
+            if not Oneway -> noise_test(Oneway, [M | Msgs], TX1, TX2);
+               Oneway     -> noise_test(Oneway, [M | Msgs], TX2, TX1)
+            end;
         {Out, In} -> ?assertMatch({out, in}, {Out, In})
     end.
 
-noise_test([], _, _) -> ok;
-noise_test([#{ payload := PL0, ciphertext := CT0 } | Msgs], CA, CB) ->
+noise_test(_, [], _, _) -> ok;
+noise_test(Oneway, [#{ payload := PL0, ciphertext := CT0 } | Msgs], CA, CB) ->
     PL = test_utils:hex_str_to_bin("0x" ++ binary_to_list(PL0)),
     CT = test_utils:hex_str_to_bin("0x" ++ binary_to_list(CT0)),
+
     {ok, CA1, CT1} = enoise_cipher_state:encrypt_with_ad(CA, <<>>, PL),
     ?assertEqual(CT, CT1),
     {ok, CA2, PL1} = enoise_cipher_state:decrypt_with_ad(CA, <<>>, CT1),
     ?assertEqual(CA1, CA2),
     ?assertEqual(PL, PL1),
-    noise_test(Msgs, CB, CA1).
+
+    %% Only one party will send/encrypt in One-way scenario
+    if not Oneway -> noise_test(Oneway, Msgs, CB, CA1);
+       Oneway     -> noise_test(Oneway, Msgs, CA1, CB)
+    end.

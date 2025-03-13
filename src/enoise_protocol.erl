@@ -22,11 +22,15 @@
 -compile([export_all, nowarn_export_all]).
 -endif.
 
--type noise_pattern() :: nn | kn | nk | kk | nx | kx | xn | in | xk | ik | xx | ix.
--type noise_msg()     :: {in | out, [enoise_hs_state:noise_token()]}.
+-type noise_pattern() :: n | k | x | nn | nk | nk1 | nx | nx1 | xn | x1n | xk
+                       | x1k | xk1 | x1k1 | xx | x1x | xx1 | x1x1 | kn | k1n
+                       | kk | k1k | kk1 | k1k1 | kx | k1x | kx1 | k1x1
+                       | in | i1n | ik | i1k | ik1 | i1k1 | ix | i1x | ix1 | i1x1.
+
+-type noise_msg() :: {in | out, [enoise_hs_state:noise_token()]}.
 
 -record(noise_protocol,
-        { hs_pattern = noiseNN      :: noise_pattern()
+        { hs_pattern = nn           :: noise_pattern()
         , dh         = dh25519      :: enoise_hs_state:noise_dh()
         , cipher     = 'ChaChaPoly' :: enoise_cipher_state:noise_cipher()
         , hash       = blake2b      :: enoise_sym_state:noise_hash()
@@ -97,6 +101,7 @@ role_adapt(responder, Msgs) ->
     Flip = fun({in, Msg}) -> {out, Msg}; ({out, Msg}) -> {in, Msg} end,
     lists:map(Flip, Msgs).
 
+-spec protocol(Pattern :: noise_pattern()) -> {[noise_msg()], [noise_msg()]}.
 protocol(n) -> {[{in, [s]}], [{out, [e, es]}]};
 protocol(k) -> {[{out, [s]}, {in, [s]}], [{out, [e, es, ss]}]};
 protocol(x) -> {[{in, [s]}], [{out, [e, es, s, ss]}]};
