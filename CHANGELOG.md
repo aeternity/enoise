@@ -6,8 +6,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Support for 448 DH function and Blake2s hash function.
 ### Changed
+- Using `crypto` over `enacl` (and removing a call to `get_stacktrace/1`) makes `enoise`
+  up to date for (at least) OTP-27.
+- Added test dependency `eqwalizer_support` to enable checking types with Eqwalizer.
 ### Removed
+- The dependency on `enacl` is not needed anymore, OTP's `crypto` library now cover all
+  necessary operations.
 
 ## [1.2.0] - 2021-10-28
 ### Added

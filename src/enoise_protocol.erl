@@ -19,7 +19,7 @@
         , to_name/1]).
 
 -ifdef(TEST).
--export([to_name/4]).
+-export([to_name/4, from_name_pattern/1, to_name_pattern/1]).
 -endif.
 
 -type noise_pattern() :: nn | kn | nk | kk | nx | kx | xn | in | xk | ik | xx | ix.
@@ -137,9 +137,9 @@ supported_dh(Dh) ->
 -spec supported() -> map().
 supported() ->
     #{ hs_pattern => [nn, kn, nk, kk, nx, kx, xn, in, xk, ik, xx, ix]
-    ,  hash       => [blake2b, sha256, sha512]
+    ,  hash       => [blake2s, blake2b, sha256, sha512]
     ,  cipher     => ['ChaChaPoly', 'AESGCM']
-    ,  dh         => [dh25519]
+    ,  dh         => [dh25519, dh448]
     }.
 
 to_name(Pattern, Dh, Cipher, Hash) ->
@@ -148,16 +148,16 @@ to_name(Pattern, Dh, Cipher, Hash) ->
 
 to_name_pattern(Atom) ->
     [Simple | Rest] = string:lexemes(atom_to_list(Atom), "_"),
-    string:uppercase(Simple) ++ lists:join("+", Rest).
+    lists:flatten(string:uppercase(Simple) ++ lists:join("+", Rest)).
 
 from_name_pattern(String) ->
     [Init | Mod2] = string:lexemes(String, "+"),
     {Simple, Mod1} = lists:splitwith(fun(C) -> C >= $A andalso C =< $Z end, Init),
-    list_to_atom(string:lowercase(Simple) ++
+    list_to_atom(lists:flatten(string:lowercase(Simple) ++
         case Mod1 of
             "" -> "";
-            _  -> "_" ++ lists:join([Mod1 | Mod2], "_")
-        end).
+            _  -> "_" ++ lists:join("_", [Mod1 | Mod2])
+        end)).
 
 to_name_dh(dh25519) -> "25519";
 to_name_dh(dh448)   -> "448".

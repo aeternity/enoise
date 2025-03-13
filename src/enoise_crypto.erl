@@ -29,12 +29,17 @@
 %% @doc Perform a Diffie-Hellman calculation with the secret key from `Key1'
 %% and the public key from `Key2' with algorithm `Algo'.
 -spec dh(Algo :: enoise_hs_state:noise_dh(),
-          Key1:: keypair(), Key2 :: keypair()) -> binary().
-dh(dh25519, Key1, Key2) ->
-    enacl:curve25519_scalarmult( enoise_keypair:seckey(Key1)
-                               , enoise_keypair:pubkey(Key2));
+         Key1:: keypair(), Key2 :: keypair()) -> binary().
+dh(Type, Key1, Key2) when Type == dh25519; Type == dh448 ->
+    dh_(ecdh_type(Type), enoise_keypair:pubkey(Key2), enoise_keypair:seckey(Key1));
 dh(Type, _Key1, _Key2) ->
     error({unsupported_diffie_hellman, Type}).
+
+ecdh_type(dh25519) -> x25519;
+ecdh_type(dh448)   -> x448.
+
+dh_(DHType, OtherPub, MyPriv) ->
+    crypto:compute_key(ecdh, OtherPub, MyPriv, DHType).
 
 -spec hmac(Hash :: enoise_sym_state:noise_hash(),
            Key :: binary(), Data :: binary()) -> binary().
@@ -54,47 +59,42 @@ hkdf(Hash, Key, Data) ->
     Output3 = hmac(Hash, TempKey, <<Output2/binary, 3:8>>),
     [Output1, Output2, Output3].
 
--spec rekey(Cipher :: enoise_cipher_state:noise_cipher(),
-            Key :: binary()) -> binary() | {error, term()}.
+-spec rekey(Cipher :: enoise_cipher_state:noise_cipher(), Key :: binary()) -> binary().
 rekey('ChaChaPoly', K0) ->
-    KLen = enacl:aead_chacha20poly1305_ietf_KEYBYTES(),
+    KLen = 32,
     <<K:KLen/binary, _/binary>> = encrypt('ChaChaPoly', K0, ?MAX_NONCE, <<>>, <<0:(32*8)>>),
     K;
 rekey(Cipher, K) ->
     encrypt(Cipher, K, ?MAX_NONCE, <<>>, <<0:(32*8)>>).
 
--spec encrypt(Cipher :: enoise_cipher_state:noise_cipher(),
-              Key :: binary(), Nonce :: non_neg_integer(),
-              Ad :: binary(), PlainText :: binary()) ->
-                binary() | {error, term()}.
-encrypt('ChaChaPoly', K, N, Ad, PlainText) ->
-    Nonce = <<0:32, N:64/little-unsigned-integer>>,
-    enacl:aead_chacha20poly1305_ietf_encrypt(PlainText, Ad, Nonce, K);
-encrypt('AESGCM', K, N, Ad, PlainText) ->
-    Nonce = <<0:32, N:64>>,
-    {CipherText, CipherTag} = crypto:crypto_one_time_aead(aes_256_gcm, K, Nonce, PlainText, Ad, true),
-    <<CipherText/binary, CipherTag/binary>>.
+-spec encrypt(Cipher :: enoise_cipher_state:noise_cipher(), Key :: binary(),
+              Nonce :: non_neg_integer(), Ad :: binary(), PlainText :: binary()) -> binary().
+encrypt(Cipher, K, N, Ad, PlainText) ->
+    {CText, CTag} = crypto:crypto_one_time_aead(cipher(Cipher), K, nonce(Cipher, N), PlainText, Ad, true),
+    <<CText/binary, CTag/binary>>.
 
--spec decrypt(Cipher ::enoise_cipher_state:noise_cipher(),
-              Key :: binary(), Nonce :: non_neg_integer(),
-              AD :: binary(), CipherText :: binary()) ->
-                binary() | {error, term()}.
-decrypt('ChaChaPoly', K, N, Ad, CipherText) ->
-    Nonce = <<0:32, N:64/little-unsigned-integer>>,
-    enacl:aead_chacha20poly1305_ietf_decrypt(CipherText, Ad, Nonce, K);
-decrypt('AESGCM', K, N, Ad, CipherText0) ->
+-spec decrypt(Cipher ::enoise_cipher_state:noise_cipher(), Key :: binary(),
+              Nonce :: non_neg_integer(), AD :: binary(),
+              CipherText :: binary()) -> binary() | {error, term()}.
+decrypt(Cipher, K, N, Ad, CipherText0) ->
     CTLen = byte_size(CipherText0) - ?MAC_LEN,
-    <<CipherText:CTLen/binary, MAC:?MAC_LEN/binary>> = CipherText0,
-    Nonce = <<0:32, N:64>>,
-    case crypto:crypto_one_time_aead(aes_256_gcm, K, Nonce, CipherText, Ad, MAC, false) of
+    <<CText:CTLen/binary, MAC:?MAC_LEN/binary>> = CipherText0,
+    case crypto:crypto_one_time_aead(cipher(Cipher), K, nonce(Cipher, N), CText, Ad, MAC, false) of
         error -> {error, decrypt_failed};
         Data  -> Data
     end.
 
+nonce('ChaChaPoly', N) -> <<0:32, N:64/little-unsigned-integer>>;
+nonce('AESGCM', N)     -> <<0:32, N:64/big-unsigned-integer>>.
+
+cipher('ChaChaPoly') -> chacha20_poly1305;
+cipher('AESGCM')     -> aes_256_gcm.
 
 -spec hash(Hash :: enoise_sym_state:noise_hash(), Data :: binary()) -> binary().
+hash(blake2s, Data) ->
+    crypto:hash(blake2s, Data);
 hash(blake2b, Data) ->
-    Hash = enacl:generichash(64, Data), Hash;
+    crypto:hash(blake2b, Data);
 hash(sha256, Data) ->
     crypto:hash(sha256, Data);
 hash(sha512, Data) ->

@@ -87,8 +87,7 @@ binary().
                 Role :: enoise_hs_state:noise_role()) ->
         {ok, enoise_hs_state:state()} | {error, term()}.
 handshake(Options, Role) ->
-    HState = create_hstate(Options, Role),
-    {ok, HState}.
+    create_hstate(Options, Role).
 
 %% @doc Do a step (either `{send, Payload}', `{rcvd, EncryptedData}',
 %% or `done')
@@ -109,10 +108,13 @@ step_handshake(HState, Data) ->
                 ComState :: noise_com_state()) ->
         {ok, noise_split_state(), noise_com_state()} | {error, term()}.
 handshake(Options, Role, ComState) ->
-    HState = create_hstate(Options, Role),
-    Timeout = proplists:get_value(timeout, Options, infinity),
-    do_handshake(HState, ComState, Timeout).
-
+    case create_hstate(Options, Role) of
+        {ok, HState} ->
+            Timeout = proplists:get_value(timeout, Options, infinity),
+            do_handshake(HState, ComState, Timeout);
+        Err = {error, _} ->
+            Err
+    end.
 
 %% @doc Upgrades a gen_tcp, or equivalent, connected socket to a Noise socket,
 %% that is, performs the client-side noise handshake.
@@ -270,14 +272,15 @@ create_hstate(Options, Role) ->
                 enoise_protocol:from_name(X);
             _ -> NoiseProtocol0
         end,
-
+    DH = enoise_protocol:dh(NoiseProtocol),
     S  = proplists:get_value(s, Options, undefined),
     E  = proplists:get_value(e, Options, undefined),
-    RS = proplists:get_value(rs, Options, undefined),
-    RE = proplists:get_value(re, Options, undefined),
+    RS = remote_keypair(DH, proplists:get_value(rs, Options, undefined)),
+    RE = remote_keypair(DH, proplists:get_value(re, Options, undefined)),
 
     enoise_hs_state:init(NoiseProtocol, Role,
                          Prologue, {S, E, RS, RE}).
+
 
 check_gen_tcp(TcpSock) ->
     case inet:getopts(TcpSock, [mode, packet, active, header, packet_size]) of
@@ -321,3 +324,5 @@ gen_tcp_rcv_msg({TcpSock, Active, Buf}, Timeout) ->
         {error, timeout}
     end.
 
+remote_keypair(_DH, undefined) -> undefined;
+remote_keypair(DH, RemotePub) when is_binary(RemotePub) -> enoise_keypair:new(DH, RemotePub).

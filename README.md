@@ -39,3 +39,9 @@ Test
 ----
 
     $ rebar3 eunit
+
+Typecheck
+---------
+
+    $ rebar3 dialyzer
+    $ elp --eqwalize-all --rebar

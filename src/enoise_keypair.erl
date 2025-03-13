@@ -30,7 +30,7 @@
 %% @doc Generate a new keypair of type `Type'.
 -spec new(Type :: key_type()) -> keypair().
 new(Type) ->
-    {Sec, Pub} = new_key_pair(Type),
+    {Pub, Sec} = new_key_pair(Type),
     #kp{ type = Type, sec = Sec, pub = Pub }.
 
 %% @doc Create a new keypair of type `Type'. If `Public' is `undefined'
@@ -69,12 +69,14 @@ seckey(#kp{ sec = S }) ->
     S.
 
 %% -- Local functions --------------------------------------------------------
-new_key_pair(dh25519) ->
-    KeyPair = enacl:crypto_sign_ed25519_keypair(),
-    {enacl:crypto_sign_ed25519_secret_to_curve25519(maps:get(secret, KeyPair)),
-     enacl:crypto_sign_ed25519_public_to_curve25519(maps:get(public, KeyPair))};
+new_key_pair(Type) when Type == dh25519; Type == dh448 ->
+    crypto:generate_key(ecdh, ecdh_type(Type));
 new_key_pair(Type) ->
     error({unsupported_key_type, Type}).
 
-pubkey_from_secret(dh25519, Secret) ->
-    enacl:curve25519_scalarmult_base(Secret).
+pubkey_from_secret(Type, Secret) when Type == dh25519; Type == dh448 ->
+    {Public, Secret} = crypto:generate_key(ecdh, ecdh_type(Type), Secret),
+    Public.
+
+ecdh_type(dh25519) -> x25519;
+ecdh_type(dh448)   -> x448.
