@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Support for 448 DH function and Blake2s hash function.
+- Support for one-way patterns: `n`, `k`, and `x`.
+- Support for deferred patterns: `nk1`, `nx1`, `x1n`, `x1k`, `xk1`, `x1k1`,
+  `x1x`, `xx1`, `x1x1`, `k1n`, `k1k`, `kk1`, `k1k1`, `k1x`, `kx1`, `k1x1`,
+  `i1n`, `i1k`, `ik1`, `i1k1`, `i1x`, `ix1`, and `i1x1`
 ### Changed
 - Using `crypto` over `enacl` (and removing a call to `get_stacktrace/1`) makes `enoise`
   up to date for (at least) OTP-27.

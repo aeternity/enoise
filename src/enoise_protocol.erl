@@ -19,14 +19,18 @@
         , to_name/1]).
 
 -ifdef(TEST).
--export([to_name/4, from_name_pattern/1, to_name_pattern/1]).
+-compile([export_all, nowarn_export_all]).
 -endif.
 
--type noise_pattern() :: nn | kn | nk | kk | nx | kx | xn | in | xk | ik | xx | ix.
--type noise_msg()     :: {in | out, [enoise_hs_state:noise_token()]}.
+-type noise_pattern() :: n | k | x | nn | nk | nk1 | nx | nx1 | xn | x1n | xk
+                       | x1k | xk1 | x1k1 | xx | x1x | xx1 | x1x1 | kn | k1n
+                       | kk | k1k | kk1 | k1k1 | kx | k1x | kx1 | k1x1
+                       | in | i1n | ik | i1k | ik1 | i1k1 | ix | i1x | ix1 | i1x1.
+
+-type noise_msg() :: {in | out, [enoise_hs_state:noise_token()]}.
 
 -record(noise_protocol,
-        { hs_pattern = noiseNN      :: noise_pattern()
+        { hs_pattern = nn           :: noise_pattern()
         , dh         = dh25519      :: enoise_hs_state:noise_dh()
         , cipher     = 'ChaChaPoly' :: enoise_cipher_state:noise_cipher()
         , hash       = blake2b      :: enoise_sym_state:noise_hash()
@@ -74,10 +78,10 @@ from_name(String) ->
                 supported_cipher(Cipher) andalso supported_hash(Hash) of
                 true  -> #noise_protocol{ hs_pattern = Pattern, dh = Dh
                                         , cipher = Cipher, hash = Hash };
-                false -> error({name_not_recognized, String})
+                false -> error({unsupported_protocol, String})
             end;
         _ ->
-            error({name_not_recognized, String})
+            error({unsupported_protocol, String})
     end.
 
 -spec msgs(Role :: enoise_hs_state:noise_role(), Protocol :: protocol()) -> [noise_msg()].
@@ -97,30 +101,57 @@ role_adapt(responder, Msgs) ->
     Flip = fun({in, Msg}) -> {out, Msg}; ({out, Msg}) -> {in, Msg} end,
     lists:map(Flip, Msgs).
 
-protocol(nn) ->
-    {[], [{out, [e]}, {in, [e, ee]}]};
-protocol(kn) ->
-    {[{out, [s]}], [{out, [e]}, {in, [e, ee, se]}]};
-protocol(nk) ->
-    {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}]};
-protocol(kk) ->
-    {[{out, [s]}, {in, [s]}], [{out, [e, es, ss]}, {in, [e, ee, se]}]};
-protocol(nx) ->
-    {[], [{out, [e]}, {in, [e, ee, s, es]}]};
-protocol(kx) ->
-    {[{out, [s]}], [{out, [e]}, {in, [e, ee, se, s, es]}]};
-protocol(xn) ->
-    {[], [{out, [e]}, {in, [e, ee]}, {out, [s, se]}]};
-protocol(in) ->
-    {[], [{out, [e, s]}, {in, [e, ee, se]}]};
-protocol(xk) ->
-    {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}, {out, [s, se]}]};
-protocol(ik) ->
-    {[{in, [s]}], [{out, [e, es, s, ss]}, {in, [e, ee, se]}]};
-protocol(xx) ->
-    {[], [{out, [e]}, {in, [e, ee, s, es]}, {out, [s, se]}]};
-protocol(ix) ->
-    {[], [{out, [e, s]}, {in, [e, ee, se, s, es]}]}.
+-spec protocol(Pattern :: noise_pattern()) -> {[noise_msg()], [noise_msg()]}.
+protocol(n) -> {[{in, [s]}], [{out, [e, es]}]};
+protocol(k) -> {[{out, [s]}, {in, [s]}], [{out, [e, es, ss]}]};
+protocol(x) -> {[{in, [s]}], [{out, [e, es, s, ss]}]};
+
+protocol(nn) -> {[], [{out, [e]}, {in, [e, ee]}]};
+
+protocol(nk)  -> {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}]};
+protocol(nk1) -> {[{in, [s]}], [{out, [e]}, {in, [e, ee, es]}]};
+
+protocol(nx)  -> {[], [{out, [e]}, {in, [e, ee, s, es]}]};
+protocol(nx1) -> {[], [{out, [e]}, {in, [e, ee, s]}, {out, [es]}]};
+
+protocol(xn)  -> {[], [{out, [e]}, {in, [e, ee]}, {out, [s, se]}]};
+protocol(x1n) -> {[], [{out, [e]}, {in, [e, ee]}, {out, [s]}, {in, [se]}]};
+
+protocol(xk)   -> {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}, {out, [s, se]}]};
+protocol(x1k)  -> {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}, {out, [s]}, {in, [se]}]};
+protocol(xk1)  -> {[{in, [s]}], [{out, [e]}, {in, [e, ee, es]}, {out, [s, se]}]};
+protocol(x1k1) -> {[{in, [s]}], [{out, [e]}, {in, [e, ee, es]}, {out, [s]}, {in, [se]}]};
+
+protocol(xx)   -> {[], [{out, [e]}, {in, [e, ee, s, es]}, {out, [s, se]}]};
+protocol(x1x)  -> {[], [{out, [e]}, {in, [e, ee, s, es]}, {out, [s]}, {in, [se]}]};
+protocol(xx1)  -> {[], [{out, [e]}, {in, [e, ee, s]}, {out, [es, s, se]}]};
+protocol(x1x1) -> {[], [{out, [e]}, {in, [e, ee, s]}, {out, [es, s]}, {in, [se]}]};
+
+protocol(kn)  -> {[{out, [s]}], [{out, [e]}, {in, [e, ee, se]}]};
+protocol(k1n) -> {[{out, [s]}], [{out, [e]}, {in, [e, ee]}, {out, [se]}]};
+
+protocol(kk)   -> {[{out, [s]}, {in, [s]}], [{out, [e, es, ss]}, {in, [e, ee, se]}]};
+protocol(k1k)  -> {[{out, [s]}, {in, [s]}], [{out, [e, es]}, {in, [e, ee]}, {out, [se]}]};
+protocol(kk1)  -> {[{out, [s]}, {in, [s]}], [{out, [e]}, {in, [e, ee, se, es]}]};
+protocol(k1k1) -> {[{out, [s]}, {in, [s]}], [{out, [e]}, {in, [e, ee, es]}, {out, [se]}]};
+
+protocol(kx)   -> {[{out, [s]}], [{out, [e]}, {in, [e, ee, se, s, es]}]};
+protocol(k1x)  -> {[{out, [s]}], [{out, [e]}, {in, [e, ee, s, es]}, {out, [se]}]};
+protocol(kx1)  -> {[{out, [s]}], [{out, [e]}, {in, [e, ee, se, s]}, {out, [es]}]};
+protocol(k1x1) -> {[{out, [s]}], [{out, [e]}, {in, [e, ee, s]}, {out, [se, es]}]};
+
+protocol(in)  -> {[], [{out, [e, s]}, {in, [e, ee, se]}]};
+protocol(i1n) -> {[], [{out, [e, s]}, {in, [e, ee]}, {out, [se]}]};
+
+protocol(ik)   -> {[{in, [s]}], [{out, [e, es, s, ss]}, {in, [e, ee, se]}]};
+protocol(i1k)  -> {[{in, [s]}], [{out, [e, es, s]}, {in, [e, ee]}, {out, [se]}]};
+protocol(ik1)  -> {[{in, [s]}], [{out, [e, s]}, {in, [e, ee, se, es]}]};
+protocol(i1k1) -> {[{in, [s]}], [{out, [e, s]}, {in, [e, ee, es]}, {out, [se]}]};
+
+protocol(ix)   -> {[], [{out, [e, s]}, {in, [e, ee, se, s, es]}]};
+protocol(i1x)  -> {[], [{out, [e, s]}, {in, [e, ee, s, es]}, {out, [se]}]};
+protocol(ix1)  -> {[], [{out, [e, s]}, {in, [e, ee, se, s]}, {out, [es]}]};
+protocol(i1x1) -> {[], [{out, [e, s]}, {in, [e, ee, s]}, {out, [se, es]}]}.
 
 supported_pattern(P) ->
     lists:member(P, maps:get(hs_pattern, supported())).
@@ -136,11 +167,24 @@ supported_dh(Dh) ->
 
 -spec supported() -> map().
 supported() ->
-    #{ hs_pattern => [nn, kn, nk, kk, nx, kx, xn, in, xk, ik, xx, ix]
-    ,  hash       => [blake2s, blake2b, sha256, sha512]
-    ,  cipher     => ['ChaChaPoly', 'AESGCM']
-    ,  dh         => [dh25519, dh448]
-    }.
+    #{ hs_pattern => [ n, k, x
+                     , nn
+                     , nk, nk1
+                     , nx, nx1
+                     , xn, x1n
+                     , xk, x1k, xk1, x1k1
+                     , xx, x1x, xx1, x1x1
+                     , kn, k1n
+                     , kk, k1k, kk1, k1k1
+                     , kx, k1x, kx1, k1x1
+                     , in, i1n
+                     , ik, i1k, ik1, i1k1
+                     , ix, i1x, ix1, i1x1
+                     ]
+     , hash       => [blake2s, blake2b, sha256, sha512]
+     , cipher     => ['ChaChaPoly', 'AESGCM']
+     , dh         => [dh25519, dh448]
+     }.
 
 to_name(Pattern, Dh, Cipher, Hash) ->
     list_to_binary(lists:join("_", ["Noise", to_name_pattern(Pattern), to_name_dh(Dh),
@@ -152,7 +196,8 @@ to_name_pattern(Atom) ->
 
 from_name_pattern(String) ->
     [Init | Mod2] = string:lexemes(String, "+"),
-    {Simple, Mod1} = lists:splitwith(fun(C) -> C >= $A andalso C =< $Z end, Init),
+    {Simple, Mod1} = lists:splitwith(fun(C) -> (C >= $A andalso C =< $Z) orelse
+                                               (C >= $0 andalso C =< $9) end, Init),
     list_to_atom(lists:flatten(string:lowercase(Simple) ++
         case Mod1 of
             "" -> "";

@@ -12,7 +12,7 @@ name_test() ->
 
 name2_test() ->
     Name = "Noise_NXpsk2_25519_AESGCM_SHA512",
-    ?assertError({name_not_recognized, Name}, enoise_protocol:from_name(Name)).
+    ?assertError({unsupported_protocol, Name}, enoise_protocol:from_name(Name)).
 
 name_pattern_test() ->
     Pat = "XKfallback+psk0",

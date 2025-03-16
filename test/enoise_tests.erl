@@ -99,18 +99,18 @@ setup_dh25519() ->
     {Configurations, SrvKeyPair, CliKeyPair}.
 
 noise_test(Conf, SKP, CKP) ->
-    #{econn := EConn, echo_srv := EchoSrv} = noise_test_run(Conf, SKP, CKP),
+    #{econn := EConn, echo_srv := EchoSrv, res := Res} = noise_test_run(Conf, SKP, CKP),
     enoise:close(EConn),
     enoise_utils:echo_srv_stop(EchoSrv),
-    ok.
+    ?assertMatch(ok, Res).
 
 noise_test_run(Conf, SKP, CKP) ->
     {Pid, MRef} = spawn_monitor_proxy(
                     fun() -> noise_test_run_(Conf, SKP, CKP) end),
     receive
-        {Pid, #{} = Info} ->
-            Info#{proxy => Pid, proxy_mref => MRef}
-    after 5000 ->
+        {Pid, {Res, #{} = Info}} ->
+            Info#{proxy => Pid, proxy_mref => MRef, res => Res}
+    after 500 ->
             erlang:error(timeout)
     end.
 
@@ -153,34 +153,46 @@ noise_test_run_(Conf, SKP, CKP) ->
 
     {ok, TcpSock} = gen_tcp:connect("localhost", Port, [{active, once}, binary, {reuseaddr, true}], 100),
 
-    Opts = [{noise, Protocol}, {s, CKP}] ++ [{rs, enoise_keypair:pubkey(SKP)} || enoise_utils:need_rs(initiator, Conf) ],
+    Opts = [{noise, Protocol}, {s, CKP}]
+             ++ [{rs, enoise_keypair:pubkey(SKP)} || enoise_utils:need_rs(initiator, Conf) ],
+
     {ok, EConn, _} = enoise:connect(TcpSock, Opts),
 
-    ok = enoise:send(EConn, <<"Hello World!">>),
-    receive
-        {noise, _, <<"Hello World!">>} -> ok
-    after 100 -> error(timeout) end,
+    Resources = #{ econn => EConn, tcp_sock => TcpSock, echo_srv => EchoSrv },
 
+    case echo_send(Resources, <<"Hello World!">>) of
+      {ok, _} ->
+        echo_send(Resources, <<"Goodbye!">>);
+      Err ->
+        Err
+    end.
+
+echo_send(Resources = #{econn := EConn}, Msg) ->
     enoise:set_active(EConn, once),
-
-    ok = enoise:send(EConn, <<"Goodbye!">>),
+    ok = enoise:send(EConn, Msg),
     receive
-        {noise, _, <<"Goodbye!">>} -> ok
-    after 100 -> error(timeout) end,
-    #{ econn => EConn
-     , tcp_sock => TcpSock
-     , echo_srv => EchoSrv }.
+        {noise, _, Msg} -> {ok, Resources}
+        after 100 -> {{error, timeout}, Resources}
+    end.
 
 noise_monitor_test(Conf, SKP, CKP) ->
     #{ econn := {enoise, EConnPid}
      , proxy := Proxy
-     , tcp_sock := _TcpSock } = noise_test_run(Conf, SKP, CKP),
+     , tcp_sock := _TcpSock
+     , res := Res } = noise_test_run(Conf, SKP, CKP),
     try proxy_exec(Proxy, fun() -> exit(normal) end)
     catch
         error:normal ->
-            receive after 100 ->
-                            false = is_process_alive(EConnPid)
-                    end
+            assert_not_alive(50, EConnPid)
+    end,
+    ?assertMatch(ok, Res).
+
+assert_not_alive(N, EConnPid) when N < 0 ->
+    ?assertMatch(false, is_process_alive(EConnPid));
+assert_not_alive(N, EConnPid) ->
+    case is_process_alive(EConnPid) of
+        false -> ok;
+        true  -> timer:sleep(5), assert_not_alive(N - 5, EConnPid)
     end.
 
 %% Talks to local echo-server (noise-c)
