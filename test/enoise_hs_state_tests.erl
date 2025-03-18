@@ -26,13 +26,15 @@ noise_hs_test(V = #{ protocol_name := Name }) ->
     Init = #{ prologue => FixK(maps:get(init_prologue, V, <<>>))
             , e        => FixK(maps:get(init_ephemeral, V, undefined))
             , s        => FixK(maps:get(init_static, V, undefined))
-            , rs       => FixK(maps:get(init_remote_static, V, undefined)) },
+            , rs       => FixK(maps:get(init_remote_static, V, undefined))
+            , psks     => lists:map(FixK, maps:get(init_psks, V, []))},
     Resp = #{ prologue => FixK(maps:get(resp_prologue, V, <<>>))
             , e        => FixK(maps:get(resp_ephemeral, V, undefined))
             , s        => FixK(maps:get(resp_static, V, undefined))
-            , rs       => FixK(maps:get(resp_remote_static, V, undefined)) },
+            , rs       => FixK(maps:get(resp_remote_static, V, undefined))
+            , psks     => lists:map(FixK, maps:get(resp_psks, V, []))},
     Messages = maps:get(messages, V),
-    HandshakeHash = maps:get(handshake_hash, V),
+    HandshakeHash = maps:get(handshake_hash, V, undefined),
 
     noise_test(Name, Protocol, Init, Resp, Messages, FixK(HandshakeHash)),
 
@@ -42,8 +44,8 @@ noise_test(_Name, Protocol, Init, Resp, Messages, HSHash) ->
     DH = enoise_protocol:dh(Protocol),
     SecK = fun(undefined) -> undefined; (Sec) -> enoise_keypair:new(DH, Sec, undefined) end,
     PubK = fun(undefined) -> undefined; (Pub) -> enoise_keypair:new(DH, Pub) end,
-    HSInit = fun(P, R, #{ e := E, s := S, rs := RS, prologue := PL }) ->
-                 {ok, HS} = enoise_hs_state:init(P, R, PL, {SecK(S), SecK(E), PubK(RS), undefined}),
+    HSInit = fun(P, R, #{ e := E, s := S, rs := RS, psks := PSKs, prologue := PL }) ->
+                 {ok, HS} = enoise_hs_state:init(P, R, PL, {SecK(S), SecK(E), PubK(RS), undefined, PSKs}),
                  HS
              end,
 
@@ -70,7 +72,9 @@ noise_test(Oneway, [M = #{ payload := PL0, ciphertext := CT0 } | Msgs], SendHS, 
             {ok, #{ rx := RX1, tx := TX1, hs_hash := HSHash1 }} = enoise_hs_state:finalize(SendHS),
             {ok, #{ rx := RX2, tx := TX2, hs_hash := HSHash2 }} = enoise_hs_state:finalize(RecvHS),
             ?assertEqual(RX1, TX2), ?assertEqual(RX2, TX1),
-            ?assertEqual(HSHash, HSHash1), ?assertEqual(HSHash, HSHash2),
+            if HSHash == undefined -> ?assertEqual(HSHash1, HSHash2);
+               true                -> ?assertEqual(HSHash, HSHash1), ?assertEqual(HSHash, HSHash2)
+            end,
             %% Only one party will send/encrypt in One-way scenario
             if not Oneway -> noise_test(Oneway, [M | Msgs], TX1, TX2);
                Oneway     -> noise_test(Oneway, [M | Msgs], TX2, TX1)

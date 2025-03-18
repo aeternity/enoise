@@ -26,13 +26,15 @@ noise_interactive(V = #{ protocol_name := Name }) ->
     Init = #{ prologue => FixK(maps:get(init_prologue, V, <<>>))
             , e        => FixK(maps:get(init_ephemeral, V, undefined))
             , s        => FixK(maps:get(init_static, V, undefined))
-            , rs       => FixK(maps:get(init_remote_static, V, undefined)) },
+            , rs       => FixK(maps:get(init_remote_static, V, undefined))
+            , psks     => lists:map(FixK, maps:get(init_psks, V, []))},
     Resp = #{ prologue => FixK(maps:get(resp_prologue, V, <<>>))
             , e        => FixK(maps:get(resp_ephemeral, V, undefined))
             , s        => FixK(maps:get(resp_static, V, undefined))
-            , rs       => FixK(maps:get(resp_remote_static, V, undefined)) },
+            , rs       => FixK(maps:get(resp_remote_static, V, undefined))
+            , psks     => lists:map(FixK, maps:get(resp_psks, V, []))},
     Messages = maps:get(messages, V),
-    HandshakeHash = maps:get(handshake_hash, V),
+    HandshakeHash = maps:get(handshake_hash, V, undefined),
 
     noise_interactive(Name, Protocol, Init, Resp, Messages, FixK(HandshakeHash)),
 
@@ -42,8 +44,8 @@ noise_interactive(_Name, Protocol, Init, Resp, Messages, HSHash) ->
     DH = enoise_protocol:dh(Protocol),
     SecK = fun(undefined) -> undefined; (Sec) -> enoise_keypair:new(DH, Sec, undefined) end,
 
-    HSInit = fun(#{ e := E, s := S, rs := RS, prologue := PL }, R) ->
-                Opts = [{noise, Protocol}, {s, SecK(S)}, {e, SecK(E)}, {rs, RS}, {prologue, PL}],
+    HSInit = fun(#{ e := E, s := S, rs := RS, prologue := PL, psks := PSKs }, R) ->
+                Opts = [{noise, Protocol}, {s, SecK(S)}, {e, SecK(E)}, {rs, RS}, {prologue, PL}, {psks, PSKs}],
                 enoise:handshake(Opts, R)
              end,
     {ok, InitHS} = HSInit(Init, initiator),
@@ -65,7 +67,9 @@ noise_interactive([#{ payload := PL0, ciphertext := CT0 } | Msgs], SendHS, RecvH
             {ok, done, #{ rx := RX1, tx := TX1, hs_hash := HSHash1 }} = enoise:step_handshake(SendHS, done),
             {ok, done, #{ rx := RX2, tx := TX2, hs_hash := HSHash2 }} = enoise:step_handshake(RecvHS, done),
             ?assertEqual(RX1, TX2), ?assertEqual(RX2, TX1),
-            ?assertEqual(HSHash, HSHash1), ?assertEqual(HSHash, HSHash2)
+            if HSHash == undefined -> ?assertEqual(HSHash1, HSHash2);
+               true                -> ?assertEqual(HSHash, HSHash1), ?assertEqual(HSHash, HSHash2)
+            end
     end.
 
 noise_dh25519_test_() ->
@@ -93,7 +97,7 @@ setup_dh25519() ->
     CliKeyPair = enoise_keypair:new(dh25519),
 
     #{ hs_pattern := Ps, hash := Hs, cipher := Cs } = enoise_protocol:supported(),
-    Configurations = [ enoise_protocol:to_name(P, dh25519, C, H)
+    Configurations = [ enoise_protocol:to_name(P, [], dh25519, C, H)
                        || P <- Ps, C <- Cs, H <- Hs ],
     %% Configurations = [ enoise_protocol:to_name(xk, dh25519, 'ChaChaPoly', blake2b) ],
     {Configurations, SrvKeyPair, CliKeyPair}.

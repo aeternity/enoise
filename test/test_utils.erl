@@ -103,7 +103,8 @@ blake2b_hkdf_data() ->
       }].
 
 noise_test_vectors() ->
-    parse_test_vectors("test/test_vectors.txt").
+    parse_test_vectors("test/test_vectors.txt") ++
+    parse_test_vectors("test/psk_test_vectors.txt").
 
 hex_str_to_bin("0x" ++ Rest) -> << <<(list_to_integer([C], 16)):4>> || C <- Rest >>.
 
@@ -131,13 +132,15 @@ supported(Name) ->
 
 analyse_unsupported(Us) ->
     UParts = lists:map(fun dismount_protocol/1, Us),
-    UPats  = lists:usort([ Pat  || {Pat, _, _, _}  <- UParts, not enoise_protocol:supported_pattern(Pat) ]),
+    UPats  = lists:usort([ Pat  || {Pat, Mods, _, _, _}  <- UParts, not enoise_protocol:supported_pattern(Pat)
+                                   orelse not enoise_protocol:supported_mods(Mods) ]),
     ?debugFmt("\nUnsupported patterns: ~120p", [UPats]).
 
 dismount_protocol(P) ->
     case string:lexemes(binary_to_list(P), "_") of
         ["Noise", PatStr, DhStr, CiphStr, HashStr] ->
-            {enoise_protocol:from_name_pattern(PatStr),
+            {Pat, Mods} = enoise_protocol:from_name_pattern(PatStr),
+            {Pat, Mods,
              enoise_protocol:from_name_dh(DhStr),
              enoise_protocol:from_name_cipher(CiphStr),
              enoise_protocol:from_name_hash(HashStr)}

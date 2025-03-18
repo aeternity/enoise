@@ -14,6 +14,7 @@
         , hash/1
         , msgs/2
         , pattern/1
+        , pat_mods/1
         , pre_msgs/2
         , supported/0
         , to_name/1]).
@@ -27,10 +28,13 @@
                        | kk | k1k | kk1 | k1k1 | kx | k1x | kx1 | k1x1
                        | in | i1n | ik | i1k | ik1 | i1k1 | ix | i1x | ix1 | i1x1.
 
+-type noise_hs_modifier() :: psk0 | psk1 | psk2 | psk3.
+
 -type noise_msg() :: {in | out, [enoise_hs_state:noise_token()]}.
 
 -record(noise_protocol,
         { hs_pattern = nn           :: noise_pattern()
+        , hs_mods    = []           :: [noise_hs_modifier()]
         , dh         = dh25519      :: enoise_hs_state:noise_dh()
         , cipher     = 'ChaChaPoly' :: enoise_cipher_state:noise_cipher()
         , hash       = blake2b      :: enoise_sym_state:noise_hash()
@@ -53,15 +57,22 @@ hash(#noise_protocol{ hash = Hash }) ->
     Hash.
 
 -spec pattern(Protocol :: protocol()) -> noise_pattern().
-pattern(#noise_protocol{ hs_pattern = Pattern }) ->
-    Pattern.
+pattern(#noise_protocol{ hs_pattern = Pat }) ->
+    Pat.
+
+-spec pat_mods(Protocol :: protocol()) -> [noise_hs_modifier()].
+pat_mods(#noise_protocol{ hs_mods = Mods }) ->
+    Mods.
 
 -spec to_name(Protocol :: protocol()) -> binary().
-to_name(Protocol = #noise_protocol{ hs_pattern = Pattern, dh = Dh
-                                  , cipher = Cipher, hash = Hash }) ->
-    case supported_pattern(Pattern) andalso supported_dh(Dh) andalso
-        supported_cipher(Cipher) andalso supported_hash(Hash) of
-        true  -> to_name(Pattern, Dh, Cipher, Hash);
+to_name(Protocol = #noise_protocol{ hs_pattern = Pat
+                                  , hs_mods    = Mods
+                                  , dh         = Dh
+                                  , cipher     = Cipher
+                                  , hash       = Hash }) ->
+    case supported_pattern(Pat) andalso supported_mods(Mods) andalso supported_dh(Dh)
+         andalso supported_cipher(Cipher) andalso supported_hash(Hash) of
+        true  -> to_name(Pat, Mods, Dh, Cipher, Hash);
         false -> error({protocol_not_recognized, Protocol})
     end.
 
@@ -70,13 +81,13 @@ from_name(Bin) when is_binary(Bin) -> from_name(binary_to_list(Bin));
 from_name(String) ->
     case string:lexemes(String, "_") of
         ["Noise", PatStr, DhStr, CipStr, HashStr] ->
-            Pattern = from_name_pattern(PatStr),
-            Dh      = from_name_dh(DhStr),
-            Cipher  = from_name_cipher(CipStr),
-            Hash    = from_name_hash(HashStr),
-            case supported_pattern(Pattern) andalso supported_dh(Dh) andalso
-                supported_cipher(Cipher) andalso supported_hash(Hash) of
-                true  -> #noise_protocol{ hs_pattern = Pattern, dh = Dh
+            {Pat, Mods} = from_name_pattern(PatStr),
+            Dh          = from_name_dh(DhStr),
+            Cipher      = from_name_cipher(CipStr),
+            Hash        = from_name_hash(HashStr),
+            case supported_pattern(Pat) andalso supported_mods(Mods) andalso supported_dh(Dh)
+                 andalso supported_cipher(Cipher) andalso supported_hash(Hash) of
+                true  -> #noise_protocol{ hs_pattern = Pat, hs_mods = Mods, dh = Dh
                                         , cipher = Cipher, hash = Hash };
                 false -> error({unsupported_protocol, String})
             end;
@@ -85,13 +96,24 @@ from_name(String) ->
     end.
 
 -spec msgs(Role :: enoise_hs_state:noise_role(), Protocol :: protocol()) -> [noise_msg()].
-msgs(Role, #noise_protocol{ hs_pattern = Pattern }) ->
-    {_Pre, Msgs} = protocol(Pattern),
+msgs(Role, #noise_protocol{ hs_pattern = Pat, hs_mods = Mods }) ->
+    {_Pre, Msgs0} = protocol(Pat),
+    Msgs = apply_mods(Msgs0, Mods),
     role_adapt(Role, Msgs).
 
+apply_mods(Msgs, []) -> Msgs;
+apply_mods([{Dir, Toks} | Msgs], [psk0 | Mods]) ->
+    apply_mods([{Dir, [psk | Toks]} | Msgs], Mods);
+apply_mods([{Dir, Toks} | Msgs], [psk1 | Mods]) ->
+    apply_mods([{Dir, Toks ++ [psk]} | Msgs], Mods);
+apply_mods([Msg0, {Dir, Toks} | Msgs], [psk2 | Mods]) ->
+    apply_mods([Msg0, {Dir, Toks ++ [psk]} | Msgs], Mods);
+apply_mods([Msg0, Msg1, {Dir, Toks} | Msgs], [psk3 | Mods]) ->
+    apply_mods([Msg0, Msg1, {Dir, Toks ++ [psk]} | Msgs], Mods).
+
 -spec pre_msgs(Role :: enoise_hs_state:noise_role(), Protocol :: protocol()) -> [noise_msg()].
-pre_msgs(Role, #noise_protocol{ hs_pattern = Pattern }) ->
-    {PreMsgs, _Msgs} = protocol(Pattern),
+pre_msgs(Role, #noise_protocol{ hs_pattern = Pat }) ->
+    {PreMsgs, _Msgs} = protocol(Pat),
     role_adapt(Role, PreMsgs).
 
 -spec role_adapt(Role :: enoise_hs_state:noise_role(), [noise_msg()]) -> [noise_msg()].
@@ -101,7 +123,7 @@ role_adapt(responder, Msgs) ->
     Flip = fun({in, Msg}) -> {out, Msg}; ({out, Msg}) -> {in, Msg} end,
     lists:map(Flip, Msgs).
 
--spec protocol(Pattern :: noise_pattern()) -> {[noise_msg()], [noise_msg()]}.
+-spec protocol(Pat :: noise_pattern()) -> {[noise_msg()], [noise_msg()]}.
 protocol(n) -> {[{in, [s]}], [{out, [e, es]}]};
 protocol(k) -> {[{out, [s]}, {in, [s]}], [{out, [e, es, ss]}]};
 protocol(x) -> {[{in, [s]}], [{out, [e, es, s, ss]}]};
@@ -156,6 +178,10 @@ protocol(i1x1) -> {[], [{out, [e, s]}, {in, [e, ee, s]}, {out, [se, es]}]}.
 supported_pattern(P) ->
     lists:member(P, maps:get(hs_pattern, supported())).
 
+supported_mods(Mods) ->
+    SupportedMods = maps:get(hs_mods, supported()),
+    lists:all(fun(Mod) -> lists:member(Mod, SupportedMods) end, Mods).
+
 supported_hash(Hash) ->
     lists:member(Hash, maps:get(hash, supported())).
 
@@ -181,28 +207,27 @@ supported() ->
                      , ik, i1k, ik1, i1k1
                      , ix, i1x, ix1, i1x1
                      ]
+     , hs_mods    => [psk0, psk1, psk2, psk3]
      , hash       => [blake2s, blake2b, sha256, sha512]
      , cipher     => ['ChaChaPoly', 'AESGCM']
      , dh         => [dh25519, dh448]
      }.
 
-to_name(Pattern, Dh, Cipher, Hash) ->
-    list_to_binary(lists:join("_", ["Noise", to_name_pattern(Pattern), to_name_dh(Dh),
+to_name(Pat, Mods, Dh, Cipher, Hash) ->
+    list_to_binary(lists:join("_", ["Noise", to_name_pattern(Pat, Mods), to_name_dh(Dh),
                                     to_name_cipher(Cipher), to_name_hash(Hash)])).
 
-to_name_pattern(Atom) ->
-    [Simple | Rest] = string:lexemes(atom_to_list(Atom), "_"),
-    lists:flatten(string:uppercase(Simple) ++ lists:join("+", Rest)).
+to_name_pattern(Pat, Mods) ->
+    PatStr = string:uppercase(atom_to_list(Pat)),
+    ModStr = lists:join("+", [ atom_to_list(Mod) || Mod <- Mods ]),
+    PatStr ++ ModStr.
 
 from_name_pattern(String) ->
     [Init | Mod2] = string:lexemes(String, "+"),
     {Simple, Mod1} = lists:splitwith(fun(C) -> (C >= $A andalso C =< $Z) orelse
                                                (C >= $0 andalso C =< $9) end, Init),
-    list_to_atom(lists:flatten(string:lowercase(Simple) ++
-        case Mod1 of
-            "" -> "";
-            _  -> "_" ++ lists:join("_", [Mod1 | Mod2])
-        end)).
+    {list_to_atom(string:lowercase(Simple)),
+     lists:sort([ list_to_atom(Mod) || Mod <- [Mod1 | Mod2], Mod /= "" ])}.
 
 to_name_dh(dh25519) -> "25519";
 to_name_dh(dh448)   -> "448".
