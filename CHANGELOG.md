@@ -11,10 +11,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Support for deferred patterns: `nk1`, `nx1`, `x1n`, `x1k`, `xk1`, `x1k1`,
   `x1x`, `xx1`, `x1x1`, `k1n`, `k1k`, `kk1`, `k1k1`, `k1x`, `kx1`, `k1x1`,
   `i1n`, `i1k`, `ik1`, `i1k1`, `i1x`, `ix1`, and `i1x1`
+- Support for pre-shared symmetric keys (handshake modifiers `psk0`-`psk3`).
+- Additional test vectors for multiple pre-shared symmetric keys. [Snow test
+  vectors](https://github.com/mcginty/snow/blob/d00b360cc61a7fe519ce7539974dca4f36c4654a/tests/vectors/snow.txt)
 ### Changed
 - Using `crypto` over `enacl` (and removing a call to `get_stacktrace/1`) makes `enoise`
   up to date for (at least) OTP-27.
 - Added test dependency `eqwalizer_support` to enable checking types with Eqwalizer.
+- Better split betweeen test code, using `-ifdef(TEST)`
 ### Removed
 - The dependency on `enacl` is not needed anymore, OTP's `crypto` library now cover all
   necessary operations.

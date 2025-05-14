@@ -19,23 +19,26 @@
 
 -type noise_role()  :: initiator | responder.
 -type noise_dh()    :: dh25519 | dh448.
--type noise_token() :: s | e | ee | ss | es | se.
+-type noise_token() :: s | e | ee | ss | es | se | psk.
 -type keypair()     :: enoise_keypair:keypair().
 -type noise_split_state() :: #{ rx := enoise_cipher_state:state(),
                                 tx := enoise_cipher_state:state(),
                                 hs_hash := binary(),
                                 final_state => state() }.
 
+-type psk() :: binary().
 -type optional_key() :: undefined | keypair().
--type initial_keys() :: {optional_key(), optional_key(), optional_key(), optional_key()}.
+-type initial_keys() :: {optional_key(), optional_key(), optional_key(), optional_key(), [psk()]}.
 
 -record(noise_hs, { ss                :: enoise_sym_state:state()
                   , s                 :: keypair() | undefined
                   , e                 :: keypair() | undefined
                   , rs                :: keypair() | undefined
                   , re                :: keypair() | undefined
+                  , psks              :: [psk()]
                   , role = initiator  :: noise_role()
                   , dh = dh25519      :: noise_dh()
+                  , psk = false       :: boolean()
                   , msgs = []         :: [enoise_protocol:noise_msg()] }).
 
 -opaque state() :: #noise_hs{}.
@@ -43,13 +46,15 @@
 
 -spec init(Protocol :: enoise_protocol:protocol(), Role :: noise_role(),
            Prologue :: binary(), Keys :: initial_keys()) -> {ok, state()} | {error, term()}.
-init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
+init(Protocol, Role, Prologue, {S, E, RS, RE, PSKs}) ->
     SS0 = enoise_sym_state:init(Protocol),
     SS1 = enoise_sym_state:mix_hash(SS0, Prologue),
     HS = #noise_hs{ ss = SS1
                   , s = S, e = E, rs = RS, re = RE
+                  , psks = PSKs
                   , role = Role
                   , dh = enoise_protocol:dh(Protocol)
+                  , psk = enoise_protocol:pat_mods(Protocol) /= []
                   , msgs = enoise_protocol:msgs(Role, Protocol) },
     PreMsgs = enoise_protocol:pre_msgs(Role, Protocol),
     pre_mix(PreMsgs, HS).
@@ -115,27 +120,48 @@ read_message(HS, [Token | Tokens], Data0) ->
         Err = {error, _} -> Err
     end.
 
-write_token(HS = #noise_hs{ e = undefined }, e) ->
-    E = new_key_pair(HS),
+write_token(HS = #noise_hs{ psk = WithPSK }, e) ->
+    HS1 = #noise_hs{ e = E } = new_e(HS),
     PubE = enoise_keypair:pubkey(E),
-    {mix_hash(HS#noise_hs{ e = E }, PubE), PubE};
-%% Should only apply during test - TODO: secure this
-write_token(HS = #noise_hs{ e = E }, e) ->
-    PubE = enoise_keypair:pubkey(E),
-    {mix_hash(HS, PubE), PubE};
+    HS2 = mix_hash(HS1, PubE),
+    case WithPSK of
+        true  -> {mix_key(HS2, PubE), PubE};
+        false -> {HS2, PubE}
+    end;
 write_token(HS = #noise_hs{ s = S }, s) ->
     {ok, HS1, Msg} = encrypt_and_hash(HS, enoise_keypair:pubkey(S)),
     {HS1, Msg};
+write_token(HS = #noise_hs{ psks = [PSK | PSKs] }, psk) ->
+    {mix_key_and_hash(HS#noise_hs{ psks = PSKs }, PSK), <<>>};
 write_token(HS, Token) ->
     {K1, K2} = dh_token(HS, Token),
     {mix_key(HS, dh(HS, K1, K2)), <<>>}.
 
-read_token(HS = #noise_hs{ re = undefined, dh = DH }, e, Data0) ->
+
+%% During tests, when running predefined test-vectors, we want to be able
+%% to use pre-set ephemeral key pairs. In production, not!
+-ifdef(TEST).
+new_e(HS = #noise_hs{ e = undefined }) ->
+    HS#noise_hs{ e = new_key_pair(HS) };
+new_e(HS) ->
+    HS.
+-else.
+new_e(HS = #noise_hs{ e = undefined }) ->
+    HS#noise_hs{ e = new_key_pair(HS) }.
+-endif.
+
+
+read_token(HS = #noise_hs{ re = undefined, dh = DH, psk = WithPSK }, e, Data0) ->
     DHLen = enoise_crypto:dhlen(DH),
     case Data0 of
         <<REPub:DHLen/binary, Data1/binary>> ->
             RE = enoise_keypair:new(DH, REPub),
-            {ok, mix_hash(HS#noise_hs{ re = RE }, REPub), Data1};
+            HS1 = mix_hash(HS#noise_hs{ re = RE }, REPub),
+            HS2 = case WithPSK of
+                      true  -> mix_key(HS1, REPub);
+                      false -> HS1
+                  end,
+            {ok, HS2, Data1};
         _ ->
             {error, {bad_data, {failed_to_read_token, e, DHLen}}}
     end;
@@ -156,6 +182,8 @@ read_token(HS = #noise_hs{ rs = undefined, dh = DH }, s, Data0) ->
         _ ->
             {error, {bad_data, {failed_to_read_token, s, DHLen}}}
     end;
+read_token(HS = #noise_hs{ psks = [PSK | PSKs] }, psk, Data) ->
+    {ok, mix_key_and_hash(HS#noise_hs{ psks = PSKs }, PSK), Data};
 read_token(HS, Token, Data) ->
     {K1, K2} = dh_token(HS, Token),
     {ok, mix_key(HS, dh(HS, K1, K2)), Data}.
@@ -183,6 +211,9 @@ mix_key(HS = #noise_hs{ ss = SS0 }, Data) ->
 
 mix_hash(HS = #noise_hs{ ss = SS0 }, Data) ->
     HS#noise_hs{ ss = enoise_sym_state:mix_hash(SS0, Data) }.
+
+mix_key_and_hash(HS = #noise_hs{ ss = SS0 }, Data) ->
+    HS#noise_hs{ ss = enoise_sym_state:mix_key_and_hash(SS0, Data) }.
 
 encrypt_and_hash(HS = #noise_hs{ ss = SS0 }, PlainText) ->
     {ok, SS1, CipherText} = enoise_sym_state:encrypt_and_hash(SS0, PlainText),

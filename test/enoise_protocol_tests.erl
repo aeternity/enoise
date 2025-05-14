@@ -8,15 +8,13 @@
 
 name_test() ->
     roundtrip("Noise_XK_25519_ChaChaPoly_SHA512"),
-    roundtrip("Noise_NN_25519_AESGCM_BLAKE2b").
-
-name2_test() ->
-    Name = "Noise_NXpsk2_25519_AESGCM_SHA512",
-    ?assertError({unsupported_protocol, Name}, enoise_protocol:from_name(Name)).
+    roundtrip("Noise_NN_25519_AESGCM_BLAKE2b"),
+    roundtrip("Noise_NXpsk2_25519_AESGCM_SHA512").
 
 name_pattern_test() ->
     Pat = "XKfallback+psk0",
-    RoundPat = enoise_protocol:to_name_pattern(enoise_protocol:from_name_pattern(Pat)),
+    {Pat1, Mods1} = enoise_protocol:from_name_pattern(Pat),
+    RoundPat = lists:flatten(enoise_protocol:to_name_pattern(Pat1, Mods1)),
     ?assertEqual(Pat, RoundPat).
 
 roundtrip(Name) ->

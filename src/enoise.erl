@@ -28,6 +28,7 @@
 -record(enoise, { pid }).
 
 -type noise_key() :: binary().
+-type psk() :: binary().
 -type noise_keypair() :: enoise_keypair:keypair().
 
 -type noise_options() :: [noise_option()].
@@ -42,6 +43,7 @@
                       | {s, noise_keypair()}
                       | {re, noise_key()}
                       | {rs, noise_key()}
+                      | {psks, [psk()]}
                       | {prologue, binary()} %% Optional
                       | {timeout, integer() | infinity}. %% Optional
 
@@ -277,10 +279,15 @@ create_hstate(Options, Role) ->
     E  = proplists:get_value(e, Options, undefined),
     RS = remote_keypair(DH, proplists:get_value(rs, Options, undefined)),
     RE = remote_keypair(DH, proplists:get_value(re, Options, undefined)),
+    PSKs = proplists:get_value(psks, Options, []),
 
-    enoise_hs_state:init(NoiseProtocol, Role,
-                         Prologue, {S, E, RS, RE}).
-
+    case length(enoise_protocol:pat_mods(NoiseProtocol)) == length(PSKs) of
+        true  ->
+            enoise_hs_state:init(NoiseProtocol, Role,
+                                 Prologue, {S, E, RS, RE, PSKs});
+        false ->
+            {error, invalid_noise_setup}
+    end.
 
 check_gen_tcp(TcpSock) ->
     case inet:getopts(TcpSock, [mode, packet, active, header, packet_size]) of

@@ -7,7 +7,7 @@
 
 bad_data_hs_1_test() ->
     SrvKeyPair = enoise_keypair:new(dh25519),
-    Proto      = enoise_protocol:to_name(xk, dh25519, 'ChaChaPoly', blake2b),
+    Proto      = enoise_protocol:to_name(xk, [], dh25519, 'ChaChaPoly', blake2b),
     Opts       = [{echos, 1}, {reply, self()}],
     Srv        = enoise_utils:echo_srv_start(4567, Proto, SrvKeyPair, Opts),
 
