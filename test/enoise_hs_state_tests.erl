@@ -22,15 +22,19 @@ noise_hs_test(V = #{ protocol_name := Name }) ->
 
     FixK = fun(undefined) -> undefined;
               (Bin) -> test_utils:hex_str_to_bin("0x" ++ binary_to_list(Bin)) end,
+    FixPSKs = fun(undefined) -> [];
+                 (List) -> [test_utils:hex_str_to_bin("0x" ++ binary_to_list(P)) || P <- List] end,
 
     Init = #{ prologue => FixK(maps:get(init_prologue, V, <<>>))
             , e        => FixK(maps:get(init_ephemeral, V, undefined))
             , s        => FixK(maps:get(init_static, V, undefined))
-            , rs       => FixK(maps:get(init_remote_static, V, undefined)) },
+            , rs       => FixK(maps:get(init_remote_static, V, undefined))
+            , psks     => FixPSKs(maps:get(init_psks, V, undefined)) },
     Resp = #{ prologue => FixK(maps:get(resp_prologue, V, <<>>))
             , e        => FixK(maps:get(resp_ephemeral, V, undefined))
             , s        => FixK(maps:get(resp_static, V, undefined))
-            , rs       => FixK(maps:get(resp_remote_static, V, undefined)) },
+            , rs       => FixK(maps:get(resp_remote_static, V, undefined))
+            , psks     => FixPSKs(maps:get(resp_psks, V, undefined)) },
     Messages = maps:get(messages, V),
     HandshakeHash = maps:get(handshake_hash, V),
 
@@ -42,8 +46,8 @@ noise_test(_Name, Protocol, Init, Resp, Messages, HSHash) ->
     DH = enoise_protocol:dh(Protocol),
     SecK = fun(undefined) -> undefined; (Sec) -> enoise_keypair:new(DH, Sec, undefined) end,
     PubK = fun(undefined) -> undefined; (Pub) -> enoise_keypair:new(DH, Pub) end,
-    HSInit = fun(P, R, #{ e := E, s := S, rs := RS, prologue := PL }) ->
-                 {ok, HS} = enoise_hs_state:init(P, R, PL, {SecK(S), SecK(E), PubK(RS), undefined}),
+    HSInit = fun(P, R, #{ e := E, s := S, rs := RS, prologue := PL, psks := PSKs }) ->
+                 {ok, HS} = enoise_hs_state:init(P, R, PL, {SecK(S), SecK(E), PubK(RS), undefined}, PSKs),
                  HS
              end,
 

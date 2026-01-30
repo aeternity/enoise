@@ -10,6 +10,7 @@
 
 -export([ finalize/1
         , init/4
+        , init/5
         , next_message/1
         , read_message/2
         , remote_keys/1
@@ -19,7 +20,7 @@
 
 -type noise_role()  :: initiator | responder.
 -type noise_dh()    :: dh25519 | dh448.
--type noise_token() :: s | e | ee | ss | es | se.
+-type noise_token() :: s | e | ee | ss | es | se | psk.
 -type keypair()     :: enoise_keypair:keypair().
 -type noise_split_state() :: #{ rx := enoise_cipher_state:state(),
                                 tx := enoise_cipher_state:state(),
@@ -36,21 +37,29 @@
                   , re                :: keypair() | undefined
                   , role = initiator  :: noise_role()
                   , dh = dh25519      :: noise_dh()
-                  , msgs = []         :: [enoise_protocol:noise_msg()] }).
+                  , msgs = []         :: [enoise_protocol:noise_msg()]
+                  , psks = []         :: [binary()] }).
 
 -opaque state() :: #noise_hs{}.
 -export_type([noise_dh/0, noise_role/0, noise_split_state/0, noise_token/0, state/0]).
 
 -spec init(Protocol :: enoise_protocol:protocol(), Role :: noise_role(),
            Prologue :: binary(), Keys :: initial_keys()) -> {ok, state()} | {error, term()}.
-init(Protocol, Role, Prologue, {S, E, RS, RE}) ->
+init(Protocol, Role, Prologue, Keys) ->
+    init(Protocol, Role, Prologue, Keys, []).
+
+-spec init(Protocol :: enoise_protocol:protocol(), Role :: noise_role(),
+           Prologue :: binary(), Keys :: initial_keys(), PSKs :: [binary()]) ->
+        {ok, state()} | {error, term()}.
+init(Protocol, Role, Prologue, {S, E, RS, RE}, PSKs) ->
     SS0 = enoise_sym_state:init(Protocol),
     SS1 = enoise_sym_state:mix_hash(SS0, Prologue),
     HS = #noise_hs{ ss = SS1
                   , s = S, e = E, rs = RS, re = RE
                   , role = Role
                   , dh = enoise_protocol:dh(Protocol)
-                  , msgs = enoise_protocol:msgs(Role, Protocol) },
+                  , msgs = enoise_protocol:msgs(Role, Protocol)
+                  , psks = PSKs },
     PreMsgs = enoise_protocol:pre_msgs(Role, Protocol),
     pre_mix(PreMsgs, HS).
 
@@ -126,6 +135,9 @@ write_token(HS = #noise_hs{ e = E }, e) ->
 write_token(HS = #noise_hs{ s = S }, s) ->
     {ok, HS1, Msg} = encrypt_and_hash(HS, enoise_keypair:pubkey(S)),
     {HS1, Msg};
+write_token(HS = #noise_hs{ psks = [PSK | Rest] }, psk) ->
+    HS1 = mix_key_and_hash(HS#noise_hs{ psks = Rest }, PSK),
+    {HS1, <<>>};
 write_token(HS, Token) ->
     {K1, K2} = dh_token(HS, Token),
     {mix_key(HS, dh(HS, K1, K2)), <<>>}.
@@ -156,6 +168,9 @@ read_token(HS = #noise_hs{ rs = undefined, dh = DH }, s, Data0) ->
         _ ->
             {error, {bad_data, {failed_to_read_token, s, DHLen}}}
     end;
+read_token(HS = #noise_hs{ psks = [PSK | Rest] }, psk, Data) ->
+    HS1 = mix_key_and_hash(HS#noise_hs{ psks = Rest }, PSK),
+    {ok, HS1, Data};
 read_token(HS, Token, Data) ->
     {K1, K2} = dh_token(HS, Token),
     {ok, mix_key(HS, dh(HS, K1, K2)), Data}.
@@ -183,6 +198,9 @@ mix_key(HS = #noise_hs{ ss = SS0 }, Data) ->
 
 mix_hash(HS = #noise_hs{ ss = SS0 }, Data) ->
     HS#noise_hs{ ss = enoise_sym_state:mix_hash(SS0, Data) }.
+
+mix_key_and_hash(HS = #noise_hs{ ss = SS0 }, Data) ->
+    HS#noise_hs{ ss = enoise_sym_state:mix_key_and_hash(SS0, Data) }.
 
 encrypt_and_hash(HS = #noise_hs{ ss = SS0 }, PlainText) ->
     {ok, SS1, CipherText} = enoise_sym_state:encrypt_and_hash(SS0, PlainText),

@@ -22,15 +22,19 @@ noise_interactive(V = #{ protocol_name := Name }) ->
 
     FixK = fun(undefined) -> undefined;
               (Bin) -> test_utils:hex_str_to_bin("0x" ++ binary_to_list(Bin)) end,
+    FixPSKs = fun(undefined) -> [];
+                 (List) -> [test_utils:hex_str_to_bin("0x" ++ binary_to_list(P)) || P <- List] end,
 
     Init = #{ prologue => FixK(maps:get(init_prologue, V, <<>>))
             , e        => FixK(maps:get(init_ephemeral, V, undefined))
             , s        => FixK(maps:get(init_static, V, undefined))
-            , rs       => FixK(maps:get(init_remote_static, V, undefined)) },
+            , rs       => FixK(maps:get(init_remote_static, V, undefined))
+            , psks     => FixPSKs(maps:get(init_psks, V, undefined)) },
     Resp = #{ prologue => FixK(maps:get(resp_prologue, V, <<>>))
             , e        => FixK(maps:get(resp_ephemeral, V, undefined))
             , s        => FixK(maps:get(resp_static, V, undefined))
-            , rs       => FixK(maps:get(resp_remote_static, V, undefined)) },
+            , rs       => FixK(maps:get(resp_remote_static, V, undefined))
+            , psks     => FixPSKs(maps:get(resp_psks, V, undefined)) },
     Messages = maps:get(messages, V),
     HandshakeHash = maps:get(handshake_hash, V),
 
@@ -42,8 +46,8 @@ noise_interactive(_Name, Protocol, Init, Resp, Messages, HSHash) ->
     DH = enoise_protocol:dh(Protocol),
     SecK = fun(undefined) -> undefined; (Sec) -> enoise_keypair:new(DH, Sec, undefined) end,
 
-    HSInit = fun(#{ e := E, s := S, rs := RS, prologue := PL }, R) ->
-                Opts = [{noise, Protocol}, {s, SecK(S)}, {e, SecK(E)}, {rs, RS}, {prologue, PL}],
+    HSInit = fun(#{ e := E, s := S, rs := RS, prologue := PL, psks := PSKs }, R) ->
+                Opts = [{noise, Protocol}, {s, SecK(S)}, {e, SecK(E)}, {rs, RS}, {prologue, PL}, {psks, PSKs}],
                 enoise:handshake(Opts, R)
              end,
     {ok, InitHS} = HSInit(Init, initiator),
@@ -93,10 +97,16 @@ setup_dh25519() ->
     CliKeyPair = enoise_keypair:new(dh25519),
 
     #{ hs_pattern := Ps, hash := Hs, cipher := Cs } = enoise_protocol:supported(),
+    %% Exclude PSK patterns - they are tested separately in enoise_psk_tests
+    NonPSKPatterns = [ P || P <- Ps, not is_psk_pattern(P) ],
     Configurations = [ enoise_protocol:to_name(P, dh25519, C, H)
-                       || P <- Ps, C <- Cs, H <- Hs ],
+                       || P <- NonPSKPatterns, C <- Cs, H <- Hs ],
     %% Configurations = [ enoise_protocol:to_name(xk, dh25519, 'ChaChaPoly', blake2b) ],
     {Configurations, SrvKeyPair, CliKeyPair}.
+
+is_psk_pattern(Pattern) ->
+    PatStr = atom_to_list(Pattern),
+    string:find(PatStr, "psk") =/= nomatch.
 
 noise_test(Conf, SKP, CKP) ->
     #{econn := EConn, echo_srv := EchoSrv, res := Res} = noise_test_run(Conf, SKP, CKP),

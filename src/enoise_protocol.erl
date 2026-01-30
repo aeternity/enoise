@@ -25,7 +25,13 @@
 -type noise_pattern() :: n | k | x | nn | nk | nk1 | nx | nx1 | xn | x1n | xk
                        | x1k | xk1 | x1k1 | xx | x1x | xx1 | x1x1 | kn | k1n
                        | kk | k1k | kk1 | k1k1 | kx | k1x | kx1 | k1x1
-                       | in | i1n | ik | i1k | ik1 | i1k1 | ix | i1x | ix1 | i1x1.
+                       | in | i1n | ik | i1k | ik1 | i1k1 | ix | i1x | ix1 | i1x1
+                       %% PSK patterns
+                       | n_psk0 | k_psk0 | x_psk1
+                       | nn_psk0 | nn_psk2 | nk_psk0 | nk_psk2 | nx_psk2
+                       | kn_psk0 | kn_psk2 | kk_psk0 | kk_psk2 | kx_psk2
+                       | xn_psk3 | xk_psk3 | xx_psk3
+                       | in_psk1 | in_psk2 | ik_psk1 | ik_psk2 | ix_psk2.
 
 -type noise_msg() :: {in | out, [enoise_hs_state:noise_token()]}.
 
@@ -151,7 +157,54 @@ protocol(i1k1) -> {[{in, [s]}], [{out, [e, s]}, {in, [e, ee, es]}, {out, [se]}]}
 protocol(ix)   -> {[], [{out, [e, s]}, {in, [e, ee, se, s, es]}]};
 protocol(i1x)  -> {[], [{out, [e, s]}, {in, [e, ee, s, es]}, {out, [se]}]};
 protocol(ix1)  -> {[], [{out, [e, s]}, {in, [e, ee, se, s]}, {out, [es]}]};
-protocol(i1x1) -> {[], [{out, [e, s]}, {in, [e, ee, s]}, {out, [se, es]}]}.
+protocol(i1x1) -> {[], [{out, [e, s]}, {in, [e, ee, s]}, {out, [se, es]}]};
+
+%% PSK patterns - One-way
+protocol(n_psk0) -> {[{in, [s]}], [{out, [psk, e, es]}]};
+protocol(k_psk0) -> {[{out, [s]}, {in, [s]}], [{out, [psk, e, es, ss]}]};
+protocol(x_psk1) -> {[{in, [s]}], [{out, [e, es, s, ss, psk]}]};
+
+%% PSK patterns - NN
+protocol(nn_psk0) -> {[], [{out, [psk, e]}, {in, [e, ee]}]};
+protocol(nn_psk2) -> {[], [{out, [e]}, {in, [e, ee, psk]}]};
+
+%% PSK patterns - NK
+protocol(nk_psk0) -> {[{in, [s]}], [{out, [psk, e, es]}, {in, [e, ee]}]};
+protocol(nk_psk2) -> {[{in, [s]}], [{out, [e, es]}, {in, [e, ee, psk]}]};
+
+%% PSK patterns - NX
+protocol(nx_psk2) -> {[], [{out, [e]}, {in, [e, ee, s, es, psk]}]};
+
+%% PSK patterns - KN
+protocol(kn_psk0) -> {[{out, [s]}], [{out, [psk, e]}, {in, [e, ee, se]}]};
+protocol(kn_psk2) -> {[{out, [s]}], [{out, [e]}, {in, [e, ee, se, psk]}]};
+
+%% PSK patterns - KK
+protocol(kk_psk0) -> {[{out, [s]}, {in, [s]}], [{out, [psk, e, es, ss]}, {in, [e, ee, se]}]};
+protocol(kk_psk2) -> {[{out, [s]}, {in, [s]}], [{out, [e, es, ss]}, {in, [e, ee, se, psk]}]};
+
+%% PSK patterns - KX
+protocol(kx_psk2) -> {[{out, [s]}], [{out, [e]}, {in, [e, ee, se, s, es, psk]}]};
+
+%% PSK patterns - XN
+protocol(xn_psk3) -> {[], [{out, [e]}, {in, [e, ee]}, {out, [s, se, psk]}]};
+
+%% PSK patterns - XK
+protocol(xk_psk3) -> {[{in, [s]}], [{out, [e, es]}, {in, [e, ee]}, {out, [s, se, psk]}]};
+
+%% PSK patterns - XX
+protocol(xx_psk3) -> {[], [{out, [e]}, {in, [e, ee, s, es]}, {out, [s, se, psk]}]};
+
+%% PSK patterns - IN
+protocol(in_psk1) -> {[], [{out, [e, s, psk]}, {in, [e, ee, se]}]};
+protocol(in_psk2) -> {[], [{out, [e, s]}, {in, [e, ee, se, psk]}]};
+
+%% PSK patterns - IK
+protocol(ik_psk1) -> {[{in, [s]}], [{out, [e, es, s, ss, psk]}, {in, [e, ee, se]}]};
+protocol(ik_psk2) -> {[{in, [s]}], [{out, [e, es, s, ss]}, {in, [e, ee, se, psk]}]};
+
+%% PSK patterns - IX
+protocol(ix_psk2) -> {[], [{out, [e, s]}, {in, [e, ee, se, s, es, psk]}]}.
 
 supported_pattern(P) ->
     lists:member(P, maps:get(hs_pattern, supported())).
@@ -180,6 +233,18 @@ supported() ->
                      , in, i1n
                      , ik, i1k, ik1, i1k1
                      , ix, i1x, ix1, i1x1
+                     %% PSK patterns
+                     , n_psk0, k_psk0, x_psk1
+                     , nn_psk0, nn_psk2
+                     , nk_psk0, nk_psk2
+                     , nx_psk2
+                     , kn_psk0, kn_psk2
+                     , kk_psk0, kk_psk2
+                     , kx_psk2
+                     , xn_psk3, xk_psk3, xx_psk3
+                     , in_psk1, in_psk2
+                     , ik_psk1, ik_psk2
+                     , ix_psk2
                      ]
      , hash       => [blake2s, blake2b, sha256, sha512]
      , cipher     => ['ChaChaPoly', 'AESGCM']

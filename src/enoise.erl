@@ -38,12 +38,14 @@
 %% provided.
 
 -type noise_option() :: {noise, noise_protocol_option()} %% Required
-                      | {e, noise_keypair()} %% Mandatary depending on `noise'
+                      | {e, noise_keypair()} %% Mandatory depending on `noise'
                       | {s, noise_keypair()}
                       | {re, noise_key()}
                       | {rs, noise_key()}
                       | {prologue, binary()} %% Optional
-                      | {timeout, integer() | infinity}. %% Optional
+                      | {timeout, integer() | infinity} %% Optional
+                      | {psk, binary()} %% For PSK patterns (single PSK)
+                      | {psks, [binary()]}. %% For PSK patterns (multiple PSKs)
 
 -type noise_protocol_option() :: enoise_protocol:protocol() | string() |
 binary().
@@ -278,8 +280,15 @@ create_hstate(Options, Role) ->
     RS = remote_keypair(DH, proplists:get_value(rs, Options, undefined)),
     RE = remote_keypair(DH, proplists:get_value(re, Options, undefined)),
 
+    %% PSK support: either a single PSK or a list of PSKs
+    PSK  = proplists:get_value(psk, Options, undefined),
+    PSKs = case PSK of
+               undefined -> proplists:get_value(psks, Options, []);
+               P         -> [P]
+           end,
+
     enoise_hs_state:init(NoiseProtocol, Role,
-                         Prologue, {S, E, RS, RE}).
+                         Prologue, {S, E, RS, RE}, PSKs).
 
 
 check_gen_tcp(TcpSock) ->
