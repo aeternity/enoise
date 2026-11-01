@@ -53,6 +53,36 @@ chachapoly_test() ->
     ?assertMatch(PlainText, PlainText1),
     ok.
 
+aesgcm_test() ->
+    #{ key := Key, nonce := Nonce, ad := AD, mac := MAC,
+       pt := PlainText, ct := CipherText } = test_utils:aesgcm_data(),
+    PTLen  = byte_size(PlainText),
+    CTLen  = byte_size(CipherText),
+    MACLen = byte_size(MAC),
+
+    %% Sanity check
+    ?assert(PTLen == CTLen),
+
+    <<CipherText0:CTLen/binary, MAC0:MACLen/binary>> =
+        enoise_crypto:encrypt('AESGCM', Key, Nonce, AD, PlainText),
+
+    ?assertMatch(CipherText, CipherText0),
+    ?assertMatch(MAC, MAC0),
+
+    <<PlainText0:PTLen/binary>> =
+        enoise_crypto:decrypt('AESGCM', Key, Nonce, AD, <<CipherText/binary, MAC/binary>>),
+
+    ?assertMatch(PlainText, PlainText0),
+
+    Key1 = enoise_crypto:rekey('AESGCM', Key),
+    <<CipherText1:CTLen/binary, MAC1:MACLen/binary>> =
+        enoise_crypto:encrypt('AESGCM', Key1, Nonce, AD, PlainText),
+    <<PlainText1:PTLen/binary>> =
+        enoise_crypto:decrypt('AESGCM', Key1, Nonce, AD, <<CipherText1/binary, MAC1/binary>>),
+    ?assertMatch(PlainText, PlainText1),
+    ok.
+
+
 blake2b_test() ->
     Test = fun(#{ input := In, output := Out }) ->
                ?assertMatch(Out, enoise_crypto:hash(blake2b, In))
