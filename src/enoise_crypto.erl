@@ -60,12 +60,9 @@ hkdf(Hash, Key, Data) ->
     [Output1, Output2, Output3].
 
 -spec rekey(Cipher :: enoise_cipher_state:noise_cipher(), Key :: binary()) -> binary().
-rekey('ChaChaPoly', K0) ->
-    KLen = 32,
-    <<K:KLen/binary, _/binary>> = encrypt('ChaChaPoly', K0, ?MAX_NONCE, <<>>, <<0:(32*8)>>),
-    K;
-rekey(Cipher, K) ->
-    encrypt(Cipher, K, ?MAX_NONCE, <<>>, <<0:(32*8)>>).
+rekey(Cipher, K0) ->
+    <<K:32/binary, _/binary>> = encrypt(Cipher, K0, ?MAX_NONCE, <<>>, <<0:(32*8)>>),
+    K.
 
 -spec encrypt(Cipher :: enoise_cipher_state:noise_cipher(), Key :: binary(),
               Nonce :: non_neg_integer(), Ad :: binary(), PlainText :: binary()) -> binary().
